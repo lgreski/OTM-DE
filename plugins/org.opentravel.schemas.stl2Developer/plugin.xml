@@ -25,6 +25,7 @@
 			icon="icons/hierarchy_co.gif" id="org.opentravel.schemas.stl2Developer.ExampleView"
 			name="Example View" restorable="true">
 		</view>
+		<!-- TODO remove ExampleXmlView and ExampleJsonView -->
 		<view class="org.opentravel.schemas.views.example.ExampleXmlView"
 			icon="icons/generic_xml_obj.gif" id="org.opentravel.schemas.stl2Developer.ExampleXmlView"
 			name="Example XML" restorable="true">
@@ -94,7 +95,8 @@
 			</view>
 			<viewShortcut id="org.opentravel.schemas.stl2Developer.RepositoryView">
 			</viewShortcut>
-			<view closeable="false"
+			
+			<!-- view closeable="true"
 				id="org.opentravel.schemas.stl2Developer.ExampleView" minimized="false"
 				moveable="true" ratio="0.8f" relationship="right"
 				relative="org.opentravel.schemas.stl2Developer.TypeView" standalone="false"
@@ -102,22 +104,31 @@
 			</view>
 			<viewShortcut id="org.opentravel.schemas.stl2Developer.ExampleView">
 			</viewShortcut>
-			<view closeable="true" 
+			<view closeable="true"
+				id="org.opentravel.schemas.stl2Developer.ContextsView" minimized="false"
+				moveable="true" relationship="stack"
+				relative="org.opentravel.schemas.stl2Developer.ExampleView"
+				standalone="false" visible="false">
+			</view>
+			<viewShortcut id="org.opentravel.schemas.stl2Developer.ContextsView">
+			</viewShortcut -->
+			
+			<!-- view closeable="true" 
 				id="org.opentravel.schemas.stl2Developer.ExampleJsonView" minimized="false"
        			moveable="true" ratio="0.75f"   relationship="bottom"
         	 	relative="org.opentravel.schemas.stl2Developer.ExampleView"
 				standalone="false" visible="true">
 			</view>
 			<viewShortcut id="org.opentravel.schemas.stl2Developer.ExampleJsonView">
-			</viewShortcut>
-			<view closeable="true"
+			</viewShortcut -->
+			<!-- view closeable="true"
 				id="org.opentravel.schemas.stl2Developer.ExampleXmlView" minimized="false"
 				moveable="true" ratio="0.75f" relationship="stack"
 				relative="org.opentravel.schemas.stl2Developer.ExampleJsonView"
 				standalone="false" visible="true">
 			</view>
 			<viewShortcut id="org.opentravel.schemas.stl2Developer.ExampleXmlView">
-			</viewShortcut>
+			</viewShortcut -->
 			<view closeable="false"
 				id="org.opentravel.schemas.stl2Developer.ValidationResultsView"
 				minimized="false" moveable="true" ratio="0.75f" relationship="bottom"
@@ -134,14 +145,6 @@
 				standalone="false" visible="true">
 			</view>
 			<viewShortcut id="org.opentravel.schemas.stl2Developer.PropertyView">
-			</viewShortcut>
-			<view closeable="true"
-				id="org.opentravel.schemas.stl2Developer.ContextsView" minimized="false"
-				moveable="true" relationship="stack"
-				relative="org.opentravel.schemas.stl2Developer.ExampleView"
-				standalone="false" visible="false">
-			</view>
-			<viewShortcut id="org.opentravel.schemas.stl2Developer.ContextsView">
 			</viewShortcut>
 			<view closeable="true"
 				id="org.opentravel.schemas.stl2Developer.ResourceView"
@@ -171,19 +174,11 @@
 	</extension>
 	<extension point="org.eclipse.ui.menus">
 			<menuContribution allPopups="false" locationURI="menu:Window">
-			<menu
-         id="org.eclipse.ui.views.showViews"
-         label="Show View">
+			<menu id="org.eclipse.ui.views.showViews" label="Show View">
 				<command commandId="org.eclipse.ui.views.showView" label="Context View"
 					style="push">
 					<parameter name="org.eclipse.ui.views.showView.viewId"
 						value="org.opentravel.schemas.stl2Developer.ContextsView">
-					</parameter>
-				</command>
-				<command commandId="org.eclipse.ui.views.showView" label="JSON Example View"
-					style="push">
-					<parameter name="org.eclipse.ui.views.showView.viewId"
-						value="org.opentravel.schemas.stl2Developer.ExampleJsonView">
 					</parameter>
 				</command>
 				<command commandId="org.eclipse.ui.views.showView" label="REST Resource View"
@@ -192,12 +187,24 @@
 						value="org.opentravel.schemas.stl2Developer.ResourceView">
 					</parameter>
 				</command>
+				<command commandId="org.eclipse.ui.views.showView" label="Example View"
+					style="push">
+					<parameter name="org.eclipse.ui.views.showView.viewId"
+						value="org.opentravel.schemas.stl2Developer.ExampleView">
+					</parameter>
+				</command>
+				<!-- command commandId="org.eclipse.ui.views.showView" label="JSON Example View"
+					style="push">
+					<parameter name="org.eclipse.ui.views.showView.viewId"
+						value="org.opentravel.schemas.stl2Developer.ExampleJsonView">
+					</parameter>
+				</command>
 				<command commandId="org.eclipse.ui.views.showView" label="XML Example View"
 					style="push">
 					<parameter name="org.eclipse.ui.views.showView.viewId"
 						value="org.opentravel.schemas.stl2Developer.ExampleXmlView">
 					</parameter>
-				</command>
+				</command -->
 				<command commandId="org.eclipse.ui.views.showView" label="Project Documentation View"
 					style="push">
 					<parameter name="org.eclipse.ui.views.showView.viewId"
@@ -230,16 +237,16 @@
 				</command>
 				<separator name="stl2Developer.separator1" visible="true">
 				</separator>
-				<command commandId="org.opentravel.schemas.commands.Add"
+				<!-- command commandId="org.opentravel.schemas.commands.Add"
 					icon="icons/add_att.gif" label="Add" mnemonic="Ctrl+A" style="push"
 					tooltip="Add object or property">
-				</command>
-				<command commandId="stl2Developer.navigation.backward" icon="icons/nav_backward.gif"
+				</command -->
+				<!-- command commandId="stl2Developer.navigation.backward" icon="icons/nav_backward.gif"
 					label="Backward" style="push">
 				</command>
 				<command commandId="stl2Developer.navigation.forward" icon="icons/nav_forward.gif"
 					label="Forward" style="push">
-				</command>
+				</command -->
 				<command commandId="org.eclipse.ui.edit.delete" icon="icons/delete_edit.gif"
 					label="Delete" style="push" tooltip="Delete selected objects or properties.">
 				</command>
@@ -316,7 +323,7 @@
 		</menuContribution>
 		<menuContribution allPopups="false"
 			locationURI="toolbar:org.opentravel.schemas.stl2Developer.ExampleView">
-			<command commandId="org.opentravel.schemas.commands.RefreshView"
+			<!-- command commandId="org.opentravel.schemas.commands.RefreshView"
 				icon="icons/refresh.gif" label="Refresh" style="push">
 			</command>
 			<command commandId="org.opentravel.schemas.commands.ExpandAll"
@@ -330,7 +337,7 @@
 				<parameter name="stl2Developer.ViewSelection.Collapse"
 					value="stl2Developer.ViewSelection.Examples">
 				</parameter>
-			</command>
+			</command -->
 		</menuContribution>
 		<menuContribution allPopups="false"
 			locationURI="toolbar:org.opentravel.schemas.stl2Developer.ValidationResultsView">
@@ -425,6 +432,8 @@
         		 icon="icons/add_att.gif" label="New Parameter Group" style="push"/>
 			<command commandId="org.opentravel.schemas.commands.newResource.PARENTREF"
         		 icon="icons/add_att.gif" label="New Parent Reference" style="push"/>
+			<command commandId="org.opentravel.schemas.commands.newResource.WIZARD"
+        		 icon="icons/add_att.gif" label="Base Response Wizard" style="push"/>
 			<command commandId="org.opentravel.schemas.commands.newResource.DELETE"
         		 icon="icons/delete_edit.gif" label="Delete" style="push"/>
 		</menuContribution>
@@ -564,15 +573,9 @@
 			name="Merge">
 		</command>
 		<!-- command categoryId="org.opentravel.schemas.stl2Developer.command.category"
-			defaultHandler="org.opentravel.schemas.commands.RefreshExamplesHandler"
-			description="Regenerates example tree from current model" id="org.opentravel.schemas.commands.RefreshExamples"
-			name="Refresh Examples">
-		</command -->
-		<!-- command categoryId="org.opentravel.schemas.stl2Developer.command.category"
 			defaultHandler="org.opentravel.schemas.commands.RefreshDocumentationViewHandler"
 			id="org.opentravel.schemas.commands.RefreshDocumentationView" name="Refresh Documentation View">
 		</command -->
-		
 		<command categoryId="org.opentravel.schemas.stl2Developer.command.category"
 			description="New resource" id="org.opentravel.schemas.commands.newResource"
 			name="New Resource">
@@ -584,6 +587,10 @@
 		<command categoryId="org.opentravel.schemas.stl2Developer.command.category"
 			id="org.opentravel.schemas.commands.newResource.PARENTREF"
 			name="New Parent Reference">
+		</command>
+		<command categoryId="org.opentravel.schemas.stl2Developer.command.category"
+			id="org.opentravel.schemas.commands.newResource.WIZARD"
+			name="Base Response Wizard">
 		</command>
 		<command
         categoryId="org.opentravel.schemas.stl2Developer.command.category"
@@ -688,7 +695,7 @@
 		</command>
 		<command categoryId="org.opentravel.schemas.stl2Developer.command.category"
 			defaultHandler="org.opentravel.schemas.commands.SaveLibrariesHandler"
-			id="org.opentravel.schemas.commands.SaveAllLibraries" name="Save All In Project">
+			id="org.opentravel.schemas.commands.SaveAllLibraries" name="Save All">
 		</command>
 		<command categoryId="org.opentravel.schemas.stl2Developer.command.category"
 			id="org.opentravel.schemas.commands.SaveLibrary" name="Save">
@@ -726,7 +733,11 @@
 		</command>
 		<command categoryId="org.opentravel.schemas.stl2Developer.command.category"
 			description="Update Type Users to new versions" id="org.opentravel.schemas.commands.VersionUpdate"
-			name="VersionUpdate">
+			name="Update to Newer Version">
+		</command>
+		<command categoryId="org.opentravel.schemas.stl2Developer.command.category"
+			description="Update Type Providers to new library" id="org.opentravel.schemas.commands.ChangeProviderLibrary"
+			name="Change Provider Library">
 		</command>
 		<category id="org.opentravel.schemas.stl2Developer.command.category"
 			name="OTM-DE Editor">
@@ -832,7 +843,7 @@
 								</test>
 								<instanceof value="org.opentravel.schemas.types.whereused.WhereUsedNode">
 								</instanceof>
-								<instanceof value="org.opentravel.schemas.node.facets.ContributedFacetNode">
+								<instanceof value="org.opentravel.schemas.node.objectMembers.ContributedFacetNode">
 								</instanceof>
 							</or>
 						</iterate>
@@ -854,25 +865,31 @@
 		</handler>
 		<handler class="org.opentravel.schemas.commands.SortNodeHandler"
 			commandId="org.opentravel.schemas.commands.Sort">
-			<enabledWhen>
+			<activeWhen>
+					<with variable="activePartId">
+						<equals value="org.opentravel.schemas.stl2Developer.TypeView">
+						</equals>
+					</with>
+			</activeWhen>
+			<!-- enabledWhen>
 				<with variable="org.opentravel.schemas.selection.nodes">
 					<iterate ifEmpty="false" operator="or">
 						<test property="stl2Developer.selection.newToChain">
 						</test>
 					</iterate>
 				</with>
-			</enabledWhen>
+			</enabledWhen -->
 		</handler>
 		<handler class="org.opentravel.schemas.commands.AddNodeHandler2"
 			commandId="org.opentravel.schemas.commands.Add">
-			<enabledWhen>
+			<!-- enabledWhen>
 				<with variable="org.opentravel.schemas.selection.nodes">
 					<iterate ifEmpty="false" operator="or">
 						<test property="stl2Developer.selection.canAdd">
 						</test>
 					</iterate>
 				</with>
-			</enabledWhen>
+			</enabledWhen -->
 		</handler>
 		<handler class="org.opentravel.schemas.commands.AddNodeForNavigatorPopup"
 			commandId="org.opentravel.schemas.commands.Add">
@@ -905,7 +922,7 @@
 		</handler>
 		<handler class="org.opentravel.schemas.commands.DeleteNodesHandler"
 			commandId="org.eclipse.ui.edit.delete">
-			<enabledWhen>
+			<!--enabledWhen>
 				<and>
 					<with variable="org.opentravel.schemas.selection.nodes">
 						<iterate ifEmpty="false" operator="and">
@@ -924,7 +941,7 @@
 						</iterate>
 					</with>
 				</and>
-			</enabledWhen>
+			</enabledWhen -->
 			<!--workaround to force this handler to be activated as default -->
 			<activeWhen>
 				<with variable="activeWorkbenchWindow.activePerspective">
@@ -956,7 +973,7 @@
 		</handler>
 		<handler class="org.opentravel.schemas.commands.NewComponentHandler"
 			commandId="org.opentravel.schemas.commands.newComponent">
-			<enabledWhen>
+			<!-- enabledWhen>
 				<with variable="org.opentravel.schemas.selection.nodes">
 					<iterate ifEmpty="false" operator="and">
 						<and>
@@ -967,7 +984,7 @@
 						</and>
 					</iterate>
 				</with>
-			</enabledWhen>
+			</enabledWhen -->
 		</handler>
 		<!-- 
 		Resource Commands 
@@ -1106,6 +1123,17 @@
 				</with>
 			</activeWhen>
 		</handler>
+		<handler class="org.opentravel.schemas.commands.ResourceCommandHandlerPopup"
+			commandId="org.opentravel.schemas.commands.newResource.WIZARD">
+			<activeWhen>
+				<with variable="activeMenu">
+					<iterate ifEmpty="false" operator="or">
+						<equals value="org.opentravel.schemas.stl2Developer.ResourceView">
+						</equals>
+					</iterate>
+				</with>
+			</activeWhen>
+		</handler>
 		
 		<handler class="org.opentravel.schemas.commands.CreateProjectFromRepo"
 			commandId="org.opentravel.schemas.commands.create.project">
@@ -1118,7 +1146,7 @@
 		</handler>
 		<handler class="org.opentravel.schemas.commands.SaveLibraryHandler"
 			commandId="org.opentravel.schemas.commands.SaveLibrary">
-			<enabledWhen>
+			<!-- enabledWhen>
 				<and>
 					<with variable="org.opentravel.schemas.selection.nodes">
 						<iterate ifEmpty="false" operator="and">
@@ -1127,7 +1155,7 @@
 						</iterate>
 					</with>
 				</and>
-			</enabledWhen>
+			</enabledWhen -->
 		</handler>
 		<handler class="org.opentravel.schemas.commands.CompileHandler"
 			commandId="org.opentravel.schemas.commands.Compile">
@@ -1144,6 +1172,9 @@
 		</handler>
 		<handler class ="org.opentravel.schemas.commands.VersionUpdateHandler"
 			commandId="org.opentravel.schemas.commands.VersionUpdate">
+		</handler>
+		<handler class ="org.opentravel.schemas.commands.ChangeTypeProviderLibraryHandler"
+			commandId="org.opentravel.schemas.commands.ChangeProviderLibrary">
 		</handler>
 		<handler class="org.opentravel.schemas.commands.CloseProjectHandler"
 			commandId="org.opentravel.schemas.commands.CloseProject">

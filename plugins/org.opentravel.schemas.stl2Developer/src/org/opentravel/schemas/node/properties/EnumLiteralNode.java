@@ -16,64 +16,87 @@
 package org.opentravel.schemas.node.properties;
 
 import org.eclipse.swt.graphics.Image;
+import org.opentravel.schemacompiler.model.TLAbstractEnumeration;
 import org.opentravel.schemacompiler.model.TLEnumValue;
-import org.opentravel.schemas.modelObject.EnumLiteralMO;
-import org.opentravel.schemas.node.ComponentNode;
 import org.opentravel.schemas.node.ComponentNodeType;
-import org.opentravel.schemas.node.ImpliedNode;
-import org.opentravel.schemas.node.ModelNode;
 import org.opentravel.schemas.node.Node;
 import org.opentravel.schemas.node.NodeFactory;
 import org.opentravel.schemas.node.NodeNameUtils;
+import org.opentravel.schemas.node.interfaces.Enumeration;
+import org.opentravel.schemas.node.interfaces.FacetInterface;
 import org.opentravel.schemas.node.interfaces.INode;
-import org.opentravel.schemas.node.listeners.BaseNodeListener;
+import org.opentravel.schemas.node.typeProviders.EnumerationClosedNode;
+import org.opentravel.schemas.node.typeProviders.EnumerationOpenNode;
 import org.opentravel.schemas.properties.Images;
-import org.opentravel.schemas.types.TypeProvider;
 
 /**
- * A property node that represents a enumeration literal. See {@link NodeFactory#newMember(INode, Object)}
+ * A property node that represents a enumeration literal. See {@link NodeFactory#newMemberOLD(INode, Object)}
  * 
  * @author Dave Hollander
  * 
  */
 
-public class EnumLiteralNode extends PropertyNode {
+public class EnumLiteralNode extends UnTypedPropertyNode {
 
-	public EnumLiteralNode(ComponentNode parent, String name) {
-		super(new TLEnumValue(), parent, name, PropertyNodeType.ENUM_LITERAL);
-		this.setName(name);
-		// setAssignedType(getRequiredType());
-		// parent.getModelObject().addChild(this.getTLModelObject());
+	public EnumLiteralNode(EnumerationClosedNode parent, String name) {
+		super(new TLEnumValue(), parent, name);
+		getTLModelObject().setLiteral(NodeNameUtils.fixEnumerationValue(name));
+		parent.addProperty(this);
 	}
 
-	public EnumLiteralNode(TLEnumValue tlObj, INode parent) {
-		super(tlObj, parent, PropertyNodeType.ENUM_LITERAL);
+	public EnumLiteralNode(EnumerationOpenNode parent, String name) {
+		super(new TLEnumValue(), parent, name);
+		getTLModelObject().setLiteral(NodeNameUtils.fixEnumerationValue(name));
+		parent.addProperty(this);
+	}
 
-		assert (modelObject instanceof EnumLiteralMO);
+	public EnumLiteralNode(TLEnumValue tlObj, FacetInterface parent) {
+		super(tlObj, parent);
+	}
 
+	public EnumLiteralNode(TLEnumValue tlObj) {
+		super(tlObj, null);
+	}
+
+	public EnumLiteralNode() {
+		super();
 	}
 
 	@Override
-	public boolean canAssign(Node type) {
-		return type instanceof ImpliedNode ? true : false;
+	public void addToTL(final FacetInterface owner, final int index) {
+		if (owner.getTLModelObject() instanceof TLAbstractEnumeration)
+			try {
+				((TLAbstractEnumeration) owner.getTLModelObject()).addValue(index, getTLModelObject());
+			} catch (IndexOutOfBoundsException e) {
+				((TLAbstractEnumeration) owner.getTLModelObject()).addValue(getTLModelObject());
+			}
+		owner.getChildrenHandler().clear();
 	}
 
-	/*
-	 * (non-Javadoc)
-	 * 
-	 * @see org.opentravel.schemas.node.PropertyNode#createProperty(org.opentravel.schemas.node.Node)
+	@Override
+	protected void removeFromTL() {
+		if (getParent() != null && getParent().getTLModelObject() instanceof TLAbstractEnumeration)
+			((TLAbstractEnumeration) getParent().getTLModelObject()).removeValue(getTLModelObject());
+	}
+
+	/**
+	 * Clone this literal. Parameters can be null.
 	 */
 	@Override
+	public EnumLiteralNode clone(Node parent, String nameSuffix) {
+		EnumLiteralNode eln = new EnumLiteralNode((TLEnumValue) getTLModelObject().cloneElement());
+		if (parent != null && parent instanceof Enumeration)
+			((Enumeration) parent).add(eln);
+		if (nameSuffix != null && !nameSuffix.isEmpty())
+			eln.setName(eln.getName() + nameSuffix);
+		return eln;
+	}
+
+	@Override
 	public INode createProperty(Node type) {
-		TLEnumValue tlObj = (TLEnumValue) cloneTLObj();
-		int index = indexOfNode();
-		((TLEnumValue) getTLModelObject()).getOwningEnum().addValue(index, tlObj);
-		EnumLiteralNode n = new EnumLiteralNode(tlObj, null);
-		getParent().getChildren().add(index, n);
-		n.setParent(getParent());
-		// n.setLibrary(getLibrary());
-		n.setName(type.getName());
-		return n;
+		TLEnumValue tlClone = (TLEnumValue) cloneTLObj();
+		EnumLiteralNode n = new EnumLiteralNode(tlClone, null);
+		return super.createProperty(n, type);
 	}
 
 	@Override
@@ -82,18 +105,16 @@ public class EnumLiteralNode extends PropertyNode {
 	}
 
 	@Override
-	public TypeProvider getAssignedType() {
-		return getRequiredType();
-	}
-
-	@Override
 	public ComponentNodeType getComponentNodeType() {
 		return ComponentNodeType.ENUM_LITERAL;
 	}
 
 	@Override
-	public ImpliedNode getRequiredType() {
-		return ModelNode.getUndefinedNode();
+	public Node getParent() {
+		if ((parent == null || parent.isDeleted()) && getTLModelObject() != null)
+			// The parent may have failed to rebuild children
+			parent = Node.GetNode(getTLModelObject().getOwningEnum());
+		return parent;
 	}
 
 	@Override
@@ -103,7 +124,7 @@ public class EnumLiteralNode extends PropertyNode {
 
 	@Override
 	public TLEnumValue getTLModelObject() {
-		return (TLEnumValue) (modelObject != null ? modelObject.getTLModelObj() : null);
+		return (TLEnumValue) tlObj;
 	}
 
 	@Override
@@ -111,45 +132,29 @@ public class EnumLiteralNode extends PropertyNode {
 		return Images.getImageRegistry().get(Images.RoleValue);
 	}
 
-	@Override
-	public String getLabel() {
-		return getName();
-		// return modelObject.getLabel() == null ? "" : modelObject.getLabel();
-	}
-
-	@Override
-	public BaseNodeListener getNewListener() {
-		return null;
-	}
-
-	@Override
-	public Node getOwningComponent() {
-		return getParent();
-	}
-
-	@Override
-	public boolean isEnabled_AssignType() {
-		return false;
-	}
-
-	@Override
-	public boolean isNavChild(boolean deep) {
-		return false;
-	}
-
-	@Override
-	public boolean isRenameable() {
-		return isEditable() && !inherited;
-	}
+	// @Override
+	// public BaseNodeListener getNewListener() {
+	// return new NodeIdentityListener(this);
+	// }
 
 	// @Override
-	// public boolean hasNavChildrenWithProperties() {
-	// return false;
+	// public LibraryMemberInterface getOwningComponent() {
+	// return (LibraryMemberInterface) getParent();
 	// }
-	//
+
+	@Override
+	protected void moveDownTL() {
+		getTLModelObject().moveDown();
+	}
+
+	@Override
+	protected void moveUpTL() {
+		getTLModelObject().moveUp();
+	}
+
 	@Override
 	public void setName(String name) {
-		if (isEditable_newToChain())
+		if (isEditable_newToChain() && getTLModelObject() != null)
 			getTLModelObject().setLiteral(NodeNameUtils.fixEnumerationValue(name));
 	}
 

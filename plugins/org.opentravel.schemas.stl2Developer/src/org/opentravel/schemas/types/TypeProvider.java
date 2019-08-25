@@ -16,24 +16,38 @@
 package org.opentravel.schemas.types;
 
 import java.util.Collection;
+import java.util.List;
 
 import org.opentravel.schemacompiler.model.TLModelElement;
 import org.opentravel.schemas.node.Node;
+import org.opentravel.schemas.node.handlers.XsdObjectHandler;
+import org.opentravel.schemas.node.interfaces.LibraryMemberInterface;
 import org.opentravel.schemas.node.libraries.LibraryNode;
 import org.opentravel.schemas.types.whereused.TypeProviderWhereUsedNode;
 
 /**
  * Implementations of this interface are type definitions or other assignable nodes that represent type definitions such
  * as Aliases.
- * 
+ * <p>
  * Methods include managing where used and access to values that can be assigned to the user from the provider.
- * 
- * Note - the only way to add a user is via the TypeUser interface. (user.setAssignedType())
+ * <p>
+ * Note - the only way to make an assignment (add a user) is via the TypeUser interface. (user.setAssignedType())
  * 
  * @author Dave Hollander
+ * @param <get>
  * 
  */
-public interface TypeProvider {
+public interface TypeProvider extends TypeProviderAndOwners {
+	// All implementers should declare the following variables
+	// public TypeProviderHandler assignmentHandler = null;
+	// public WhereAssignedHandler whereAssignedHandler2 = null;
+
+	/**
+	 * Add to where assigned and set listener
+	 * 
+	 * @param user
+	 */
+	public void addTypeUser(TypeUser user);
 
 	/**
 	 * @param user
@@ -41,20 +55,9 @@ public interface TypeProvider {
 	 */
 	public void addWhereUsed(TypeUser user);
 
-	public String getDescription();
-
-	public LibraryNode getLibrary();
-
-	public String getName();
-
-	public TLModelElement getTLModelObject();
-
-	// /**
-	// * @return the component node used to represent users of this type.
-	// */
-	// public INode getTypeNode();
-
 	/**
+	 * Get the collection of assigned locations from assignment handler.
+	 * 
 	 * @return a unmodifiable collection of type users that use this as a type definition or base type
 	 */
 	public Collection<TypeUser> getWhereAssigned();
@@ -81,6 +84,8 @@ public interface TypeProvider {
 	 */
 	public int getWhereUsedAndDescendantsCount();
 
+	int getWhereUsedCount();
+
 	/**
 	 * @return a node suitable for use in navigator to represent the where used collection
 	 */
@@ -104,17 +109,7 @@ public interface TypeProvider {
 	public boolean isAssignedByReference();
 
 	/**
-	 * @return true if this object can be used as an assigned type or base type
-	 */
-	public boolean isNamedEntity();
-
-	/**
-	 * Remove provider as type for all users.
-	 */
-	public void removeAll();
-
-	/**
-	 * Remove the listener for the type user
+	 * Remove the listener on the type user for this type provider
 	 * 
 	 * @param user
 	 */
@@ -125,7 +120,7 @@ public interface TypeProvider {
 	 * 
 	 * @param user
 	 */
-	public void removeTypeUser(TypeUser user);
+	public void removeWhereAssigned(TypeUser user);
 
 	public void setListener(TypeUser typeUser);
 
@@ -138,10 +133,40 @@ public interface TypeProvider {
 	 */
 	public boolean isRenameableWhereUsed();
 
-	public Node getOwningComponent();
+	/**
+	 * @return true if this object can be used as an assigned type or base type
+	 */
+	@Deprecated
+	public boolean isNamedEntity();
+
+	/**
+	 * Remove provider as type for all users.
+	 * 
+	 * @param force
+	 *            false the type name will be preserved to allow recovery after closing libraries. Set to true to force
+	 *            the assigned type to missing.
+	 */
+	public void removeAll(boolean force);
+
+	// ******************** Hierarchy methods **************************************************
+	public TLModelElement getTLModelObject();
+
+	public List<TypeProvider> getDescendants_TypeProviders();
+
+	public String getDescription();
+
+	public LibraryNode getLibrary();
+
+	public String getName();
+
+	public String getNamespace();
+
+	public LibraryMemberInterface getOwningComponent();
 
 	public Node getParent();
 
-	int getWhereUsedCount();
+	public XsdObjectHandler getXsdObjectHandler();
+
+	public void setXsdHandler(XsdObjectHandler xsdObjectHandler);
 
 }

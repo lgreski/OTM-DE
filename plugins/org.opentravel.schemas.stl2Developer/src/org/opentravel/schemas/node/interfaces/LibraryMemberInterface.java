@@ -15,7 +15,13 @@
  */
 package org.opentravel.schemas.node.interfaces;
 
+import java.util.List;
+
+import org.opentravel.schemacompiler.model.TLModelElement;
+import org.opentravel.schemas.node.VersionNode;
+import org.opentravel.schemas.node.handlers.children.ChildrenHandlerI;
 import org.opentravel.schemas.node.libraries.LibraryNode;
+import org.opentravel.schemas.node.typeProviders.AliasNode;
 
 /**
  * Implementors are objects that are first class, named members of the library.
@@ -26,21 +32,7 @@ import org.opentravel.schemas.node.libraries.LibraryNode;
 
 public interface LibraryMemberInterface extends INode {
 
-	public String getName();
-
-	public String getLabel();
-
-	public LibraryNode getLibrary();
-
-	public void setLibrary(LibraryNode library);
-
-	public String getPrefix();
-
-	public String getNamespace();
-
-	public String getNameWithPrefix();
-
-	public boolean isValid();
+	public LibraryMemberInterface clone(LibraryNode targetLib, String nameSuffix);
 
 	/**
 	 * Create a copy of this node in destination library
@@ -50,5 +42,80 @@ public interface LibraryMemberInterface extends INode {
 	 * @return the copied node
 	 */
 	public LibraryMemberInterface copy(LibraryNode destLib) throws IllegalArgumentException;
+
+	public List<AliasNode> getAliases();
+
+	/**
+	 * @return children handler specific to this library member or null if no children
+	 */
+	public ChildrenHandlerI<?> getChildrenHandler();
+
+	@Override
+	public String getLabel();
+
+	@Override
+	public LibraryNode getLibrary();
+
+	@Override
+	public String getName();
+
+	@Override
+	public String getNamespace();
+
+	@Override
+	public String getNameWithPrefix();
+
+	@Override
+	public String getPrefix();
+
+	/**
+	 * @return
+	 */
+	public TLModelElement getTLModelObject();
+
+	/**
+	 * @return
+	 */
+	public VersionNode getVersionNode();
+
+	/**
+	 * @return
+	 */
+	public boolean isEditable_isNewOrAsMinor();
+
+	/**
+	 * @return
+	 */
+	public boolean isEditable_newToChain();
+
+	/**
+	 * @return
+	 */
+	public boolean isEnabled_AddProperties();
+
+	/**
+	 * @return
+	 */
+	public boolean isInHead();
+
+	/**
+	 * @return
+	 */
+	public boolean isLatestVersion();
+
+	/**
+	 * @return
+	 */
+	public boolean isNewToChain();
+
+	public boolean isValid();
+
+	/**
+	 * @return true if this object is a later version of another object. True if has same base ns and name as the object
+	 *         it extends.
+	 */
+	public boolean isVersioned();
+
+	public void setLibrary(LibraryNode library);
 
 }

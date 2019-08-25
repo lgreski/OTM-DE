@@ -15,7 +15,7 @@
  */
 package org.opentravel.schemas.types;
 
-import org.opentravel.schemas.node.properties.SimpleAttributeNode;
+import org.opentravel.schemas.node.properties.SimpleAttributeFacadeNode;
 
 /**
  * Implementations have a simple attribute as a member of the object. Includes VWA and Core.
@@ -25,9 +25,25 @@ import org.opentravel.schemas.node.properties.SimpleAttributeNode;
  */
 public interface SimpleAttributeOwner {
 
-	public SimpleAttributeNode getSimpleAttribute();
+	public SimpleAttributeFacadeNode getSimpleAttribute();
 
-	public boolean setSimpleType(TypeProvider provider);
+	// @Deprecated
+	// public boolean setSimpleType(TypeProvider provider);
+	//
+	// @Deprecated
+	// public TypeProvider getSimpleType();
 
-	public TypeProvider getSimpleType();
+	/**
+	 * 
+	 * @return type assigned to the simple attribute
+	 */
+	public TypeProvider getAssignedType();
+
+	/**
+	 * Attempt to set the type assigned to the simple attribute.
+	 * 
+	 * @param type
+	 * @return true if the state of the simple type changed.
+	 */
+	public TypeProvider setAssignedType(TypeProvider type);
 }

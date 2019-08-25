@@ -15,22 +15,15 @@
  */
 package org.opentravel.schemas.commands;
 
-import java.util.ArrayList;
-import java.util.List;
-
 import org.eclipse.core.commands.ExecutionEvent;
 import org.eclipse.core.commands.ExecutionException;
 import org.opentravel.schemacompiler.repository.RepositoryException;
 import org.opentravel.schemas.controllers.DefaultRepositoryController;
 import org.opentravel.schemas.node.Node;
-import org.opentravel.schemas.node.facets.ContextualFacetNode;
-import org.opentravel.schemas.node.interfaces.ExtensionOwner;
 import org.opentravel.schemas.node.libraries.LibraryNode;
 import org.opentravel.schemas.stl2developer.DialogUserNotifier;
-import org.opentravel.schemas.types.TypeUser;
-import org.opentravel.schemas.types.whereused.ContextualFacetUserNode;
-import org.opentravel.schemas.types.whereused.ExtensionUserNode;
 import org.opentravel.schemas.types.whereused.LibraryProviderNode;
+import org.opentravel.schemas.types.whereused.LibraryUsersToUpdateHelper;
 import org.opentravel.schemas.types.whereused.TypeUserNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -77,28 +70,31 @@ public class VersionUpdateHandler extends OtmAbstractHandler {
 	 * Library Provider node lists all of the parent's type users that are assigned types from the owner library.
 	 * 
 	 * @param providerLibNode
+	 *            - owner is the library that provides types to the parent lib
 	 */
 	private void updateLibrary(LibraryProviderNode providerLibNode) {
 		DefaultRepositoryController rc = (DefaultRepositoryController) mc.getRepositoryController();
 		LibraryNode libToUpdate = (LibraryNode) providerLibNode.getParent();
-		LibraryNode libProvidingTypes = (LibraryNode) providerLibNode.getOwner();
+		LibraryNode libProvidingTypes = providerLibNode.getOwner();
 
-		// Get the type and extension users to update
-		List<TypeUser> usersToUpdate = new ArrayList<TypeUser>();
-		List<ExtensionOwner> extensionsToUpdate = new ArrayList<ExtensionOwner>();
-		List<ContextualFacetNode> facetsToUpdate = new ArrayList<ContextualFacetNode>();
-		for (Node user : providerLibNode.getChildren(false))
-			if (user instanceof TypeUserNode) {
-				if (!usersToUpdate.contains(((TypeUserNode) user).getOwner()))
-					usersToUpdate.add(((TypeUserNode) user).getOwner());
-			} else if (user instanceof ExtensionUserNode) {
-				if (!extensionsToUpdate.contains(((ExtensionUserNode) user).getOwner()))
-					extensionsToUpdate.add(((ExtensionUserNode) user).getOwner());
-			} else if (user instanceof ContextualFacetUserNode) {
-				if (!facetsToUpdate.contains(((ContextualFacetUserNode) user).getOwner()))
-					facetsToUpdate.add(((ContextualFacetUserNode) user).getOwner());
-			}
-		if (usersToUpdate.isEmpty() && extensionsToUpdate.isEmpty() && facetsToUpdate.isEmpty()) {
+		LibraryUsersToUpdateHelper toUpdate = new LibraryUsersToUpdateHelper(providerLibNode);
+		// // Get the type and extension users to update
+		// List<TypeUser> usersToUpdate = new ArrayList<>();
+		// List<ExtensionOwner> extensionsToUpdate = new ArrayList<>();
+		// List<ContextualFacetNode> facetsToUpdate = new ArrayList<>();
+		// for (Node user : providerLibNode.getChildren(false))
+		// if (user instanceof TypeUserNode) {
+		// if (!usersToUpdate.contains(((TypeUserNode) user).getOwner()))
+		// usersToUpdate.add(((TypeUserNode) user).getOwner());
+		// } else if (user instanceof ExtensionUserNode) {
+		// if (!extensionsToUpdate.contains(((ExtensionUserNode) user).getOwner()))
+		// extensionsToUpdate.add(((ExtensionUserNode) user).getOwner());
+		// } else if (user instanceof ContextualFacetUserNode) {
+		// if (!facetsToUpdate.contains(((ContextualFacetUserNode) user).getOwner()))
+		// facetsToUpdate.add(((ContextualFacetUserNode) user).getOwner());
+		// }
+		// if (usersToUpdate.isEmpty() && extensionsToUpdate.isEmpty() && facetsToUpdate.isEmpty()) {
+		if (toUpdate.isEmpty()) {
 			DialogUserNotifier.openWarning("Version Update Warning", "Could not find objects to update.");
 			return;
 		}
@@ -140,69 +136,14 @@ public class VersionUpdateHandler extends OtmAbstractHandler {
 				+ replacement.getNameWithPrefix() + "?";
 		if (DialogUserNotifier.openQuestion("Update to Latest Version", question)) {
 			// replace type users using the replacement map
-			replacement.replaceAllUsers(usersToUpdate);
-			replacement.replaceAllExtensions(extensionsToUpdate);
-			replacement.replaceAllContributors(facetsToUpdate);
+			toUpdate.replace(replacement);
+			// replacement.replaceAllUsers(toUpdate.getUsersToUpdate());
+			// replacement.replaceAllExtensions(toUpdate.getExtensionsToUpdate());
+			// replacement.replaceAllContributors(toUpdate.getFacetsToUpdate());
 		}
 
 		// How to clear the TypeUserNode?
 		libToUpdate.getWhereUsedHandler().refreshUsedByNode();
 		mc.refresh(libToUpdate);
 	}
-	// private void updateLibraryOLD(LibraryProviderNode providerLibNode) {
-	// DefaultRepositoryController rc = (DefaultRepositoryController) mc.getRepositoryController();
-	// LibraryNode libToUpdate = (LibraryNode) providerLibNode.getParent();
-	// List<TypeUser> usersToUpdate = new ArrayList<TypeUser>();
-	// for (Node typeUserNode : providerLibNode.getChildren())
-	// if (!usersToUpdate.contains(((TypeUserNode) typeUserNode).getOwner()))
-	// usersToUpdate.add(((TypeUserNode) typeUserNode).getOwner());
-	//
-	// // Ask the user if they want Draft versions?
-	// String question = "Update to latest Draft version? Answer Yes to include draft or No for only Final versions.";
-	// String[] buttons = { "Yes", "No", "Cancel" };
-	// int result = DialogUserNotifier.openQuestionWithButtons("Update to Latest Version", question, buttons);
-	// boolean includeDrafts = false;
-	// if (result == 0)
-	// includeDrafts = true;
-	// else if (result == 2)
-	// return; // Exit on cancel
-	//
-	// // Get a list of extensionOwners and TypeUsers from libToUpdate
-	// Set<LibraryNode> usedLibs = new HashSet<LibraryNode>();
-	// for (Node n : providerLibNode.getChildren())
-	// if (n instanceof TypeUserNode)
-	// usedLibs.add(((TypeUserNode) n).getOwner().getAssignedType().getLibrary());
-	// else if (n instanceof ExtensionUserNode)
-	// usedLibs.add(((ExtensionUserNode) n).getOwner().getExtensionBase().getLibrary());
-	//
-	// // Create replacement map
-	// HashMap<LibraryNode, LibraryNode> replacementMap;
-	// try {
-	// replacementMap = rc.getVersionUpdateMap(new ArrayList<LibraryNode>(usedLibs), includeDrafts);
-	// } catch (RepositoryException e1) {
-	// DialogUserNotifier.openWarning("Version Update Warning", e1.getLocalizedMessage());
-	// return;
-	// }
-	//
-	// LibraryNode targetLib = null;
-	// LibraryNode oldLib = null;
-	// for (Entry<LibraryNode, LibraryNode> e : replacementMap.entrySet()) {
-	// targetLib = e.getValue();
-	// oldLib = e.getKey();
-	// }
-	// if (targetLib == null) {
-	// DialogUserNotifier.openWarning("Update to Latest Version", "Did not find a later version.");
-	// return;
-	// }
-	//
-	// question = "Do you want to update " + oldLib.getNameWithPrefix() + " with " + targetLib.getNameWithPrefix()
-	// + "?";
-	// if (DialogUserNotifier.openQuestion("Update to Latest Version", question))
-	// // replace type users using the replacement map
-	// libToUpdate.replaceAllUsers(replacementMap);
-	//
-	// // How to clear the TypeUserNode?
-	// libToUpdate.getWhereUsedHandler().refreshUsedByNode();
-	// mc.refresh(libToUpdate);
-	// }
 }

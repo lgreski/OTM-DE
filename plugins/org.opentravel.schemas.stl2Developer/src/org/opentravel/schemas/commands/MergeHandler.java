@@ -35,13 +35,13 @@ public class MergeHandler extends OtmAbstractHandler {
 
 	public static String COMMAND_ID = "org.opentravel.schemas.commands.MergeNodes";
 
-	private List<Node> toMerge = new ArrayList<Node>();
+	private List<Node> toMerge = new ArrayList<>();
 
 	@Override
 	public Object execute(ExecutionEvent exEvent) throws ExecutionException {
 		if (isEnabled()) {
 			Node selectedNode = toMerge.get(0);
-			Node newNode = selectedNode.getOwningComponent().clone("_Merged");
+			Node newNode = ((Node) selectedNode.getOwningComponent()).clone("_Merged");
 
 			int cnt = 0;
 			for (Node node : mc.getSelectedNodes_NavigatorView()) {

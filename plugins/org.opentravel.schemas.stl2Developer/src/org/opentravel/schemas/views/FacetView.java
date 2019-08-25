@@ -54,15 +54,18 @@ import org.opentravel.schemas.commands.DeleteNodesHandler;
 import org.opentravel.schemas.commands.GoToTypeHandler;
 import org.opentravel.schemas.commands.NewComponentHandler;
 import org.opentravel.schemas.controllers.OtmActions;
-import org.opentravel.schemas.node.AliasNode;
 import org.opentravel.schemas.node.ComponentNode;
-import org.opentravel.schemas.node.EnumerationOpenNode;
 import org.opentravel.schemas.node.Node;
-import org.opentravel.schemas.node.facets.ContextualFacetNode;
 import org.opentravel.schemas.node.interfaces.Enumeration;
 import org.opentravel.schemas.node.interfaces.ExtensionOwner;
+import org.opentravel.schemas.node.interfaces.FacadeInterface;
 import org.opentravel.schemas.node.interfaces.INode;
+import org.opentravel.schemas.node.interfaces.InheritedInterface;
 import org.opentravel.schemas.node.properties.PropertyNode;
+import org.opentravel.schemas.node.typeProviders.AbstractContextualFacet;
+import org.opentravel.schemas.node.typeProviders.AliasNode;
+import org.opentravel.schemas.node.typeProviders.ContextualFacetNode;
+import org.opentravel.schemas.node.typeProviders.EnumerationOpenNode;
 import org.opentravel.schemas.properties.ExternalizedStringProperties;
 import org.opentravel.schemas.properties.Images;
 import org.opentravel.schemas.properties.Messages;
@@ -72,7 +75,7 @@ import org.opentravel.schemas.stl2developer.OtmRegistry;
 import org.opentravel.schemas.utils.RCPUtils;
 import org.opentravel.schemas.widgets.ButtonBarManager;
 import org.opentravel.schemas.widgets.ButtonWithAction;
-import org.opentravel.schemas.widgets.LibraryTablePoster;
+import org.opentravel.schemas.widgets.FacetViewTablePoster;
 import org.opentravel.schemas.widgets.LibraryTablePosterWithButtons;
 import org.opentravel.schemas.widgets.OtmHandlers;
 import org.opentravel.schemas.widgets.OtmSections;
@@ -102,6 +105,9 @@ public class FacetView extends OtmAbstractView {
 	private Table table; // listener needs this to be class scoped
 	private TableViewer facetViewer;
 
+	// TODO - work on selection processes.
+	// Separate out node posted in table from selected node
+	// The selected node will typically be a child/grand-child of the table node
 	private Node currentNode;
 	private Node prevNode;
 
@@ -117,11 +123,12 @@ public class FacetView extends OtmAbstractView {
 	private ExtendableAction extendableAction;
 	private Label extendableLabel;
 	private ExtendsAction extendsAction;
+	private Label extendsLabel;
 	private ClearExtendsAction clearExtendsAction;
 	// private CloneSelectedFacetNodesAction cloneSelectedFacetNodesAction;
 	private ButtonBarManager buttonBarManager;
-	private LibraryTablePoster tablePoster;
-	private final List<IWithNodeAction> nodeActions = new ArrayList<IWithNodeAction>();
+	private FacetViewTablePoster tablePoster;
+	private final List<IWithNodeAction> nodeActions = new ArrayList<>();
 
 	private class FacetTableDoubleClick implements IDoubleClickListener {
 		@Override
@@ -231,7 +238,7 @@ public class FacetView extends OtmAbstractView {
 		if (mainWindow == null || !mainWindow.hasDisplay())
 			return currentNode.getChildren();
 
-		final List<Node> actionList = new ArrayList<Node>();
+		final List<Node> actionList = new ArrayList<>();
 		// Walk the table and if the row is checked, select it
 		final TableItem[] tia = table.getItems();
 		for (int i = 0; i < tia.length; i++) {
@@ -269,8 +276,8 @@ public class FacetView extends OtmAbstractView {
 		addAsNodeWithAction(upFacetAction);
 		downFacetAction = new DownFacetAction(mainWindow, ExternalizedStringProperties.create("OtmW.68", "OtmW.69"));
 		addAsNodeWithAction(downFacetAction);
-		changeObjectAction = new ChangeObjectAction(mainWindow, ExternalizedStringProperties.create("OtmW.84",
-				"OtmW.85"));
+		changeObjectAction = new ChangeObjectAction(mainWindow,
+				ExternalizedStringProperties.create("OtmW.84", "OtmW.85"));
 		addAsNodeWithAction(changeObjectAction);
 
 		IContributionItem addAction = RCPUtils.createCommandContributionItem(getSite(), AddNodeHandler2.COMMAND_ID,
@@ -318,7 +325,10 @@ public class FacetView extends OtmAbstractView {
 		addAsNodeWithAction(extendableAction);
 
 		// Field and button for the base type
-		extendsField = mc.getFields().formatTextField(extensionComposite, OtmTextFields.extendsName, 1);
+		extendsLabel = new Label(extensionComposite, SWT.NONE);
+		extendsLabel.setText(Messages.getString("OtmW.350"));
+		extendsLabel.setToolTipText(Messages.getString("OtmW.351"));
+		extendsField = mc.getFields().formatTextField(extensionComposite, extendsLabel, OtmTextFields.extendsName, 1);
 		extendsField.setLayoutData(new GridData(GridData.FILL_HORIZONTAL | GridData.GRAB_HORIZONTAL));
 		extendsField.setEditable(false);
 		extendsSelector = mc.getFields().formatButton(extensionComposite, OtmWidgets.extendsSelector,
@@ -329,8 +339,8 @@ public class FacetView extends OtmAbstractView {
 		extendsClearButton = mc.getFields().formatButton(extensionComposite, OtmWidgets.clearExtends,
 				OtmActions.clearExtends(), null);
 		extendsClearButton.setImage(Images.getImageRegistry().get("delete"));
-		clearExtendsAction = new ClearExtendsAction(mainWindow, ExternalizedStringProperties.create("OtmW.352",
-				"OtmW.353"), extendsField, extendsClearButton);
+		clearExtendsAction = new ClearExtendsAction(mainWindow,
+				ExternalizedStringProperties.create("OtmW.352", "OtmW.353"), extendsField, extendsClearButton);
 
 		// Post the button bar
 		final Composite bb = buttonBarManager.createControl(parent);
@@ -341,8 +351,8 @@ public class FacetView extends OtmAbstractView {
 
 		disableAll();
 
-		table = toolkit.createTable(parent, SWT.MULTI | SWT.BORDER | SWT.FULL_SELECTION | SWT.CHECK | SWT.V_SCROLL
-				| SWT.H_SCROLL);
+		table = toolkit.createTable(parent,
+				SWT.MULTI | SWT.BORDER | SWT.FULL_SELECTION | SWT.CHECK | SWT.V_SCROLL | SWT.H_SCROLL);
 		final GridData td = new GridData(SWT.FILL, SWT.FILL, true, false);
 		td.widthHint = 350;
 		td.heightHint = SWT.DEFAULT;
@@ -395,9 +405,9 @@ public class FacetView extends OtmAbstractView {
 
 	@Override
 	public void refresh() {
-		List<Node> selectedNodes = getSelectedNodes();
+		// 8/28/2018 - setCurrentNode will reset to container in table
+		setCurrentNode(currentNode);
 		postNode(currentNode);
-		select(selectedNodes);
 	}
 
 	@Override
@@ -418,25 +428,29 @@ public class FacetView extends OtmAbstractView {
 			return;
 		if (target == null || target.isDeleted()) {
 			// LOGGER.warn("Posted deleted node: " + target);
+			clearTable();
+			mc.getFields().postField(nameField, "Deleted", false);
 			return;
 		}
 
+		if (!target.isValid()) {
+			ValidationResultsView validationView = OtmRegistry.getValidationResultsView();
+			if (validationView != null)
+				validationView.refresh(target);
+		}
+
 		// LOGGER.debug("Posting facet table for node: " + target);
-		OtmHandlers.suspendHandlers();
 		Node node = target;
-		// Don't try to post a property - show its whole component.
-		if (target instanceof PropertyNode || target instanceof AliasNode)
-			node = target.getOwningComponent();
+
+		OtmHandlers.suspendHandlers();
 
 		try {
-			if (node == null) {
-				clearTable();
-				return;
-			}
-
 			setButtonState(target);
-
-			mc.getFields().postField(nameField, node.getName(), node.isRenameable());
+			if (node instanceof AbstractContextualFacet)
+				mc.getFields().postField(nameField, ((AbstractContextualFacet) node).getLocalName(),
+						node.isRenameable());
+			else
+				mc.getFields().postField(nameField, node.getName(), node.isRenameable());
 			mc.getFields().postField(typeField, node.getComponentType(), false);
 			mc.getFields().postField(extendsField, node.getExtendsTypeName(), false);
 
@@ -446,14 +460,24 @@ public class FacetView extends OtmAbstractView {
 			OtmHandlers.enableHandlers();
 			select(target); // select the row that was passed in.
 		}
-
 		// LOGGER.debug("Tree Selection is: "+OtmRegistry.getModelNavigatorView().getSelectedNodes());
 	}
 
 	@Override
-	public void setCurrentNode(final INode curNode) {
+	public void setCurrentNode(INode curNode) {
+		if (curNode instanceof InheritedInterface)
+			curNode = ((InheritedInterface) curNode).getInheritedFrom();
+		if (curNode instanceof FacadeInterface)
+			curNode = ((FacadeInterface) curNode).get();
+
+		// Don't try to post a property - show its whole component.
+		if (curNode instanceof PropertyNode || curNode instanceof AliasNode)
+			curNode = curNode.getOwningComponent();
+
 		if (curNode != currentNode) {
 			// LOGGER.debug("Setting previous node: " + currentNode);
+			// If the node is a facade, show the underlying node
+
 			prevNode = currentNode;
 			currentNode = (Node) curNode;
 			postNode(currentNode);
@@ -507,6 +531,14 @@ public class FacetView extends OtmAbstractView {
 				extendsAction.setEnabled(true);
 			clearExtendsAction.setEnabled(curNode.getExtendsType() != null);
 		}
+		if (curNode instanceof AbstractContextualFacet) {
+			extendsLabel.setText(Messages.getString("OtmW.350a"));
+			extendsLabel.setToolTipText(Messages.getString("OtmW.351a"));
+		} else {
+			extendsLabel.setText(Messages.getString("OtmW.350"));
+			extendsLabel.setToolTipText(Messages.getString("OtmW.351"));
+		}
+
 	}
 
 	private Collection<IWithNodeAction> getNodeActions() {

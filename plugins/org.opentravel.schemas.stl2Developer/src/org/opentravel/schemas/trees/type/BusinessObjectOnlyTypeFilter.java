@@ -16,9 +16,12 @@
 package org.opentravel.schemas.trees.type;
 
 import org.eclipse.jface.viewers.Viewer;
-import org.opentravel.schemas.node.BusinessObjectNode;
+import org.opentravel.schemas.node.AggregateNode;
+import org.opentravel.schemas.node.NavNode;
 import org.opentravel.schemas.node.Node;
+import org.opentravel.schemas.node.VersionAggregateNode;
 import org.opentravel.schemas.node.interfaces.LibraryInterface;
+import org.opentravel.schemas.node.typeProviders.facetOwners.BusinessObjectNode;
 
 /**
  * Provide only business objects to the type selection wizard.
@@ -32,14 +35,14 @@ public class BusinessObjectOnlyTypeFilter extends TypeSelectionFilter {
 
 	@Override
 	public boolean isValidSelection(Node n) {
-		return (n != null) && n instanceof BusinessObjectNode;
+		return n instanceof BusinessObjectNode;
 	}
 
 	/**
 	 * Filter to select only business object nodes.
 	 * 
 	 * @param namespace
-	 *            null for any namespace or string namespace that must be matched
+	 *            null for any namespace or namespace string that must be matched
 	 */
 	public BusinessObjectOnlyTypeFilter(String namespace) {
 		targetNamespace = namespace;
@@ -47,16 +50,24 @@ public class BusinessObjectOnlyTypeFilter extends TypeSelectionFilter {
 
 	@Override
 	public boolean select(final Viewer viewer, final Object parentElement, final Object element) {
-		if (element == null || !(element instanceof Node))
+		if (!(element instanceof Node))
 			return false;
 
 		final Node n = (Node) element;
 		if (n instanceof LibraryInterface)
 			return targetNamespace == null || n.getNamespace().equals(targetNamespace);
-		if (n.isNavigation())
-			return true;
 		if (targetNamespace != null && !n.getNamespace().equals(targetNamespace))
 			return false;
+		if (n instanceof AggregateNode) // these extend NavNode
+			return n instanceof VersionAggregateNode;
+		if (n instanceof NavNode)
+			return ((NavNode) n).isComplexRoot();
+
+		if (n.isNavigation())
+			return true;
+
 		return n instanceof BusinessObjectNode;
 	}
+	// Exclude: AggregateNode, implied
+	// Include: Complex Nav Node
 }

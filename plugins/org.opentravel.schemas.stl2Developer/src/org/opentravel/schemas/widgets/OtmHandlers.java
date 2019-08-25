@@ -43,11 +43,10 @@ import org.eclipse.swt.widgets.TreeItem;
 import org.opentravel.schemas.controllers.MainController;
 import org.opentravel.schemas.controllers.OtmActions;
 import org.opentravel.schemas.node.ComponentNode;
-import org.opentravel.schemas.node.FamilyNode;
 import org.opentravel.schemas.node.Node;
-import org.opentravel.schemas.node.facets.RoleFacetNode;
 import org.opentravel.schemas.node.libraries.LibraryNode;
 import org.opentravel.schemas.node.properties.AttributeNode;
+import org.opentravel.schemas.node.typeProviders.RoleFacetNode;
 import org.opentravel.schemas.stl2developer.DialogUserNotifier;
 import org.opentravel.schemas.stl2developer.MainWindow;
 import org.opentravel.schemas.stl2developer.OtmRegistry;
@@ -313,7 +312,7 @@ public class OtmHandlers {
 					// LOGGER.debug("drag start used prev node: " + curNode);
 				}
 				if (curNode != null) {
-					if (curNode instanceof FamilyNode || curNode instanceof LibraryNode) {
+					if (curNode instanceof LibraryNode) {
 						LOGGER.debug("Why drag families or libraries?");
 					}
 					if (curNode.isAssignable()) {

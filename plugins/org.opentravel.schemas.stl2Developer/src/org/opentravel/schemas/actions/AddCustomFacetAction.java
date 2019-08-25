@@ -15,38 +15,32 @@
  */
 package org.opentravel.schemas.actions;
 
-import org.eclipse.core.commands.ExecutionEvent;
-import org.eclipse.core.commands.ExecutionException;
 import org.opentravel.schemacompiler.model.TLFacetType;
-import org.opentravel.schemacompiler.util.OTM16Upgrade;
 import org.opentravel.schemas.commands.ContextualFacetHandler;
-import org.opentravel.schemas.commands.OtmAbstractHandler;
-import org.opentravel.schemas.node.BusinessObjectNode;
-import org.opentravel.schemas.node.ComponentNode;
-import org.opentravel.schemas.node.Node;
-import org.opentravel.schemas.node.NodeFactory;
-import org.opentravel.schemas.node.facets.FacetNode;
-import org.opentravel.schemas.node.properties.PropertyNode;
+import org.opentravel.schemas.node.interfaces.LibraryMemberInterface;
+import org.opentravel.schemas.node.typeProviders.ChoiceObjectNode;
+import org.opentravel.schemas.node.typeProviders.facetOwners.BusinessObjectNode;
 import org.opentravel.schemas.properties.ExternalizedStringProperties;
 import org.opentravel.schemas.properties.StringProperties;
-import org.opentravel.schemas.stl2developer.DialogUserNotifier;
-import org.opentravel.schemas.stl2developer.OtmRegistry;
-import org.opentravel.schemas.wizards.NewFacetWizard;
-import org.opentravel.schemas.wizards.validators.NewFacetValidator;
 
 /**
+ * Front end for ContextualFacetHandler()
+ * 
+ * @see ContextualFacetHandler#addContextualFacet(ChoiceObjectNode)
+ * 
  * @author Dave Hollander
  * 
  */
 public class AddCustomFacetAction extends OtmAbstractAction {
 	private static StringProperties propsDefault = new ExternalizedStringProperties("action.addCustom");
 
-	OtmAbstractHandler handler = new OtmAbstractHandler() {
-		@Override
-		public Object execute(ExecutionEvent event) throws ExecutionException {
-			return null;
-		}
-	};
+	// // TODO - what is this? It is not in the addQueryFacetAction
+	// OtmAbstractHandler handler = new OtmAbstractHandler() {
+	// @Override
+	// public Object execute(ExecutionEvent event) throws ExecutionException {
+	// return null;
+	// }
+	// };
 
 	/**
 	 *
@@ -61,80 +55,16 @@ public class AddCustomFacetAction extends OtmAbstractAction {
 
 	@Override
 	public void run() {
-		if (OTM16Upgrade.otm16Enabled)
-			addContextualFacet(TLFacetType.CUSTOM);
-		else
-			addCustomFacet();
+		LibraryMemberInterface current = getOwnerOfNavigatorSelection();
+		if (current instanceof BusinessObjectNode)
+			new ContextualFacetHandler().addContextualFacet((BusinessObjectNode) current, TLFacetType.CUSTOM);
 	}
 
 	@Override
 	public boolean isEnabled() {
 		// Unmanaged or in the most current (head) library in version chain.
-		Node n = mc.getCurrentNode_NavigatorView().getOwningComponent();
+		LibraryMemberInterface n = getOwnerOfNavigatorSelection();
 		return n instanceof BusinessObjectNode ? n.isEditable_newToChain() : false;
-		// use if we allow custom facets to be added as minor version change
-		// return n instanceof BusinessObjectNode ? n.isEnabled_AddProperties() : false;
-
-	}
-
-	private void addContextualFacet(TLFacetType type) {
-		ContextualFacetHandler cfh = new ContextualFacetHandler();
-		ComponentNode current = (ComponentNode) mc.getSelectedNode_NavigatorView().getOwningComponent();
-		if (current != null && current instanceof BusinessObjectNode)
-			cfh.addContextualFacet((BusinessObjectNode) current, TLFacetType.CUSTOM);
-
-		// // Verify the current node is editable business object
-		// ComponentNode current = (ComponentNode) mc.getSelectedNode_NavigatorView().getOwningComponent();
-		// if (current == null || !(current instanceof BusinessObjectNode) || !current.isEditable_newToChain()) {
-		// DialogUserNotifier.openWarning("Add Custom Facet",
-		// "Custom Facets can only be added to new Business Objects");
-		// return;
-		// }
-		// BusinessObjectNode bo = (BusinessObjectNode) current;
-		//
-		// // Create the contextual facet
-		// CustomFacetNode cf = new CustomFacetNode();
-		// cf.setName("new");
-		// bo.getLibrary().addMember(cf);
-		// bo.getTLModelObject().addCustomFacet(cf.getTLModelObject());
-		//
-		// // Create contributed facet
-		// NodeFactory.newComponentMember(bo, cf.getTLModelObject());
-		// mc.refresh(bo);
-	}
-
-	private void addCustomFacet() {
-		final TLFacetType facetType = TLFacetType.CUSTOM;
-		ComponentNode current = (ComponentNode) mc.getSelectedNode_NavigatorView().getOwningComponent();
-		if (current == null || !(current instanceof BusinessObjectNode) || !current.isEditable_newToChain()) {
-			DialogUserNotifier.openWarning("Add Custom Facet",
-					"Custom Facets can only be added to new Business Objects");
-			return;
-		}
-
-		// use if we allow custom facets to be added as minor version change
-		// // Use the version utils in handler to create a minor or patch version if needed
-		// if (current.isEnabled_AddProperties() && !current.isInHead())
-		// current = handler.createVersionExtension(current);
-		// if (current == null)
-		// return;
-
-		final BusinessObjectNode bo = (BusinessObjectNode) current;
-		final ComponentNode propertyOwner = (ComponentNode) current.getFacet_Detail();
-
-		// Set up and run the wizard
-		String defaultContext = current.getLibrary().getDefaultContextId();
-		String defaultName = defaultContext;
-		final NewFacetWizard wizard = new NewFacetWizard(propertyOwner, defaultName);
-		wizard.setValidator(new NewFacetValidator(current, facetType, wizard));
-		wizard.run(OtmRegistry.getActiveShell());
-		if (!wizard.wasCanceled()) {
-			FacetNode newFacet = bo.addFacet(wizard.getName(), facetType);
-			for (final PropertyNode n : wizard.getSelectedProperties()) {
-				NodeFactory.newMember(newFacet, n.cloneTLObj());
-			}
-		}
-		mc.refresh(bo);
 	}
 
 }

@@ -22,10 +22,10 @@ import java.util.List;
 import org.eclipse.jface.wizard.WizardDialog;
 import org.eclipse.swt.widgets.Shell;
 import org.opentravel.schemacompiler.model.TLFacetType;
-import org.opentravel.schemas.modelObject.ValueWithAttributesAttributeFacetMO;
+import org.opentravel.schemas.actions.ChangeActionController;
 import org.opentravel.schemas.node.ComponentNode;
 import org.opentravel.schemas.node.SubType;
-import org.opentravel.schemas.node.facets.VWA_AttributeFacetNode;
+import org.opentravel.schemas.node.facets.AttributeFacetNode;
 
 /**
  * Change Wizard. Change owning library, object type or property facet parent. Keep a history of changes to allow
@@ -40,41 +40,47 @@ public class ChangeWizard extends ValidatingWizard implements Cancelable {
 
 	private ChangeWizardPage page;
 	private boolean canceled;
-	private final List<SubType> allowedObjectTypes = new ArrayList<SubType>();
-	private final List<ExtentedTLFacetType> allowedFacetTypes = new ArrayList<ExtentedTLFacetType>();
+	private final List<SubType> allowedObjectTypes = new ArrayList<>();
+	private final List<ExtendedTLFacetType> allowedFacetTypes = new ArrayList<>();
 	private final ComponentNode editedNode;
+	private final ChangeActionController changeActionController;
 
 	/**
 	 * Set up the change wizard for the passed node.
 	 * 
 	 * @param editedNode
+	 * @param changeActionController
 	 */
-	public ChangeWizard(final ComponentNode editedNode) {
+	public ChangeWizard(final ComponentNode editedNode, ChangeActionController changeActionController) {
 		this.editedNode = editedNode;
+		// TODO - expose for use in pages, testing and controller
 		allowedObjectTypes
 				.addAll(Arrays.asList(SubType.BUSINESS_OBJECT, SubType.CORE_OBJECT, SubType.VALUE_WITH_ATTRS));
-		allowedFacetTypes.addAll(Arrays.asList(ExtentedTLFacetType.values()));
+		allowedFacetTypes.addAll(Arrays.asList(ExtendedTLFacetType.values()));
+		this.changeActionController = changeActionController;
 	}
 
 	/**
 	 * The enum exist only because there is missing TLFacetType.ATTRIBUTES, describing the VWA facet with attributes.
 	 * After adding this type to TLFacetType this enum can be deleted.
 	 */
-	enum ExtentedTLFacetType {
+	public static final String DISPLAY_NAME = "Attributes";
+
+	public enum ExtendedTLFacetType {
 		ID(TLFacetType.ID),
 		SUMMARY(TLFacetType.SUMMARY),
 		DETAIL(TLFacetType.DETAIL),
 		SIMPLE(TLFacetType.SIMPLE),
-		VWA_ATTRIBUTES(ValueWithAttributesAttributeFacetMO.DISPLAY_NAME);
+		VWA_ATTRIBUTES(DISPLAY_NAME);
 
 		private TLFacetType tlType;
 		private String identityName;
 
-		private ExtentedTLFacetType(TLFacetType tlType) {
+		private ExtendedTLFacetType(TLFacetType tlType) {
 			this.tlType = tlType;
 		}
 
-		private ExtentedTLFacetType(String identityName) {
+		private ExtendedTLFacetType(String identityName) {
 			this((TLFacetType) null);
 			this.identityName = identityName;
 		}
@@ -90,14 +96,14 @@ public class ChangeWizard extends ValidatingWizard implements Cancelable {
 			return identityName;
 		}
 
-		public static ExtentedTLFacetType valueOf(ComponentNode facet) {
-			if (facet instanceof VWA_AttributeFacetNode) {
+		public static ExtendedTLFacetType valueOf(ComponentNode facet) {
+			if (facet instanceof AttributeFacetNode) {
 				return VWA_ATTRIBUTES;
 			}
 			if (facet.getFacetType() == null) {
 				return null;
 			}
-			for (ExtentedTLFacetType tl : values()) {
+			for (ExtendedTLFacetType tl : values()) {
 				if (tl.tlType == facet.getFacetType()) {
 					return tl;
 				}
@@ -114,7 +120,7 @@ public class ChangeWizard extends ValidatingWizard implements Cancelable {
 	@Override
 	public void addPages() {
 		page = new ChangeWizardPage("Change Object", "Perform transforms on the object", getValidator(), editedNode,
-				allowedObjectTypes, allowedFacetTypes);
+				allowedObjectTypes, allowedFacetTypes, changeActionController);
 		addPage(page);
 	}
 

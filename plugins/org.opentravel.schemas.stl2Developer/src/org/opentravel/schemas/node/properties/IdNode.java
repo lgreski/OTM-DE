@@ -17,17 +17,16 @@ package org.opentravel.schemas.node.properties;
 
 import org.opentravel.schemacompiler.model.TLAttribute;
 import org.opentravel.schemacompiler.model.TLAttributeType;
-import org.opentravel.schemacompiler.model.TLModelElement;
-import org.opentravel.schemas.modelObject.AttributeMO;
 import org.opentravel.schemas.node.ModelNode;
 import org.opentravel.schemas.node.Node;
 import org.opentravel.schemas.node.NodeFactory;
 import org.opentravel.schemas.node.NodeFinders;
+import org.opentravel.schemas.node.interfaces.FacetInterface;
 import org.opentravel.schemas.node.interfaces.INode;
 import org.opentravel.schemas.types.TypeProvider;
 
 /**
- * A property node that represents an XML ID. See {@link NodeFactory#newMember(INode, Object)}
+ * A property node that represents an XML ID. See {@link NodeFactory#newMemberOLD(INode, Object)}
  * 
  * @author Dave Hollander
  * 
@@ -35,23 +34,28 @@ import org.opentravel.schemas.types.TypeProvider;
 public class IdNode extends AttributeNode {
 	TypeProvider idType = null;
 
-	public IdNode(PropertyOwnerInterface parent, String name) {
-		super(parent, name, PropertyNodeType.ID);
+	public IdNode(FacetInterface parent, String name) {
+		super(parent, name);
+		if (parent != null)
+			changeHandler = new PropertyRoleChangeHandler(this);
+
 		if (name == null || name.isEmpty())
 			name = "id";
 		setName(name);
-		idType = (TypeProvider) NodeFinders.findNodeByName("ID", ModelNode.XSD_NAMESPACE);
-		// does nothing because there is a required type. - setAssignedType(idType);
-		getTLModelObject().setType((TLAttributeType) idType.getTLModelObject());
+
+		// Set the required type - done only at initialization
+		getRequiredType().getWhereAssignedHandler().addUser(this);
+		getTLModelObject().setType((TLAttributeType) getRequiredType().getTLModelObject());
 	}
 
-	public IdNode(TLModelElement tlObj, PropertyOwnerInterface parent) {
-		super(tlObj, parent, PropertyNodeType.ID);
-		idType = (TypeProvider) NodeFinders.findNodeByName("ID", ModelNode.XSD_NAMESPACE);
-		((TLAttribute) getTLModelObject()).setType((TLAttributeType) idType.getTLModelObject());
+	public IdNode(TLAttribute tlObj, FacetInterface parent) {
+		super(tlObj, parent);
+		if (parent != null)
+			changeHandler = new PropertyRoleChangeHandler(this);
 
-		assert (modelObject instanceof AttributeMO);
-		assert (tlObj instanceof TLAttribute);
+		// Set the required type - done only at initialization
+		getRequiredType().getWhereAssignedHandler().addUser(this);
+		getTLModelObject().setType((TLAttributeType) getRequiredType().getTLModelObject());
 	}
 
 	@Override
@@ -61,6 +65,18 @@ public class IdNode extends AttributeNode {
 
 	@Override
 	public TypeProvider getRequiredType() {
+		if (idType == null)
+			idType = (TypeProvider) NodeFinders.findNodeByName("ID", ModelNode.XSD_NAMESPACE);
+		assert idType != null;
 		return idType;
 	}
+
+	/**
+	 * Override - ignore assignment and just return the ID simple type.
+	 */
+	@Override
+	public TypeProvider setAssignedType(TypeProvider provider) {
+		return getRequiredType();
+	}
+
 }

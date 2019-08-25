@@ -31,11 +31,12 @@ import org.opentravel.schemacompiler.model.TLParameter;
 import org.opentravel.schemacompiler.model.TLResource;
 import org.opentravel.schemas.node.ComponentNode;
 import org.opentravel.schemas.node.Node;
-import org.opentravel.schemas.node.facets.FacetNode;
-import org.opentravel.schemas.node.facets.QueryFacetNode;
+import org.opentravel.schemas.node.interfaces.FacetInterface;
 import org.opentravel.schemas.node.listeners.ResourceDependencyListener;
 import org.opentravel.schemas.node.properties.PropertyNode;
 import org.opentravel.schemas.node.resources.ResourceField.ResourceFieldType;
+import org.opentravel.schemas.node.typeProviders.ContextualFacetNode;
+import org.opentravel.schemas.node.typeProviders.QueryFacetNode;
 import org.opentravel.schemas.properties.Images;
 import org.opentravel.schemas.properties.Messages;
 import org.slf4j.Logger;
@@ -77,10 +78,17 @@ public class ParamGroup extends ResourceBase<TLParamGroup> {
 	/********************************************************************************
 	 * 
 	 */
+	// invoked by resource children handler
 	public ParamGroup(TLParamGroup tlParamgroup) {
 		super(tlParamgroup);
 		setName(null); // set to default if null or empty
 
+		// Check children
+		int tlKids = tlParamgroup.getParameters().size();
+		int kids = getChildren().size();
+		// if (tlKids != kids)
+		// LOGGER.warn("Missing parameters in " + this);
+		// assert tlKids == kids;
 	}
 
 	public ParamGroup(ResourceNode parent) {
@@ -92,9 +100,14 @@ public class ParamGroup extends ResourceBase<TLParamGroup> {
 	public ParamGroup(ResourceNode rn, ComponentNode fn, boolean idGroup) {
 		this(rn);
 		setIdGroup(idGroup); // do before adding facet and it's parameters
-		if (fn != null && fn instanceof FacetNode) {
-			setName(fn.getLabel());
-			setReferenceFacet((FacetNode) fn);
+		if (fn != null && fn instanceof FacetInterface) {
+			String name = fn.getLabel();
+			if (fn instanceof ContextualFacetNode)
+				name = ((ContextualFacetNode) fn).getName();
+			// else if (fn instanceof QueryFacetNode)
+			// name = ((ContextualFacetNode) fn).getName();
+			setName(name);
+			setReferenceFacet((FacetInterface) fn);
 		}
 	}
 
@@ -151,7 +164,7 @@ public class ParamGroup extends ResourceBase<TLParamGroup> {
 
 	public void setIdGroup(boolean idGroup) {
 		tlObj.setIdGroup(idGroup);
-		LOGGER.debug("Set id group to: " + tlObj.isIdGroup());
+		// LOGGER.debug("Set id group to: " + tlObj.isIdGroup());
 	}
 
 	@Override
@@ -176,8 +189,11 @@ public class ParamGroup extends ResourceBase<TLParamGroup> {
 
 	@Override
 	public void addChildren() {
-		for (TLParameter tlParam : tlObj.getParameters())
-			new ResourceParameter(tlParam);
+		if (!tlObj.getParameters().isEmpty())
+			for (TLParameter tlParam : tlObj.getParameters())
+				new ResourceParameter(tlParam);
+		// else
+		// LOGGER.debug("No Parameters found on " + this);
 	}
 
 	@Override
@@ -201,15 +217,22 @@ public class ParamGroup extends ResourceBase<TLParamGroup> {
 		return "Parameter Group";
 	}
 
-	protected Node getFacetRef() {
+	@Override
+	public String getDecoration() {
+		String decoration = "  (";
+		decoration += getChildren().size() + " parameters";
+		return decoration + ")";
+	}
+
+	public Node getFacetRef() {
 		return tlObj.getFacetRef() != null ? this.getNode(tlObj.getFacetRef().getListeners()) : null;
 	}
 
 	protected String getFacetLabel() {
 		Node facetRef = getFacetRef();
 
-		return (facetRef != null) ? ResourceCodegenUtils.getActionFacetReferenceName((TLFacet) facetRef
-				.getTLModelObject()) : "";
+		return (facetRef != null)
+				? ResourceCodegenUtils.getActionFacetReferenceName((TLFacet) facetRef.getTLModelObject()) : "";
 	}
 
 	/**
@@ -219,18 +242,19 @@ public class ParamGroup extends ResourceBase<TLParamGroup> {
 	 */
 	// TODO - JUNIT - add test for ID/non-ID group behavior
 	public String[] getSubjectFacets() {
-		List<FacetNode> facets = new ArrayList<FacetNode>();
-		for (Node facet : getOwningComponent().getSubject().getChildren()) {
-			if (!(facet instanceof FacetNode))
-				continue;
-			if (isIdGroup() && facet instanceof QueryFacetNode)
-				continue;
-			facets.add((FacetNode) facet);
-		}
+		List<FacetInterface> facets = new ArrayList<>();
+		if (getOwningComponent().getSubject() != null)
+			for (Node facet : getOwningComponent().getSubject().getChildren()) {
+				if (!(facet instanceof FacetInterface))
+					continue;
+				if (isIdGroup() && facet instanceof QueryFacetNode)
+					continue;
+				facets.add((FacetInterface) facet);
+			}
 		int size = facets.size();
 		String[] fs = new String[size];
 		int i = 0;
-		for (Node facet : facets)
+		for (FacetInterface facet : facets)
 			fs[i++] = ResourceCodegenUtils.getActionFacetReferenceName((TLFacet) facet.getTLModelObject());
 		return fs;
 
@@ -238,7 +262,7 @@ public class ParamGroup extends ResourceBase<TLParamGroup> {
 
 	@Override
 	public List<ResourceField> getFields() {
-		List<ResourceField> fields = new ArrayList<ResourceField>();
+		List<ResourceField> fields = new ArrayList<>();
 
 		// Facet Name - list of facets from subject
 		new ResourceField(fields, getFacetLabel(), "rest.ParamGroup.fields.referenceFacetName", ResourceFieldType.Enum,
@@ -270,15 +294,17 @@ public class ParamGroup extends ResourceBase<TLParamGroup> {
 
 	public List<Node> getPossibleFields() {
 		// use resource codegen utils to get a complete list
-		List<Node> fields = new ArrayList<Node>();
-		for (TLMemberField<?> field : ResourceCodegenUtils.getEligibleParameterFields((TLFacet) getFacetRef()
-				.getTLModelObject())) {
-			Node f = this.getNode(((TLModelElement) field).getListeners());
-			if (f != null)
-				fields.add(f);
-			else
-				LOGGER.debug("Error: null node from field: " + field.getName());
-		}
+		// Note - codegen utils will skip repeating objects
+		List<Node> fields = new ArrayList<>();
+		if (getFacetRef() != null)
+			for (TLMemberField<?> field : ResourceCodegenUtils
+					.getEligibleParameterFields((TLFacet) getFacetRef().getTLModelObject())) {
+				Node f = this.getNode(((TLModelElement) field).getListeners());
+				if (f != null)
+					fields.add(f);
+				// else
+				// LOGGER.debug("Error: null node from field: " + field.getName());
+			}
 		return fields;
 	}
 
@@ -286,7 +312,7 @@ public class ParamGroup extends ResourceBase<TLParamGroup> {
 	 * @return an array of string template contributions based on parameters in this group
 	 */
 	public List<String> getPathTemplates() {
-		ArrayList<String> contributions = new ArrayList<String>();
+		ArrayList<String> contributions = new ArrayList<>();
 		for (Node param : getChildren()) {
 			if (((ResourceParameter) param).isPathParam())
 				contributions.add("{" + param.getName() + "}");
@@ -309,7 +335,7 @@ public class ParamGroup extends ResourceBase<TLParamGroup> {
 	 * @return list of strings for the components of the query
 	 */
 	public List<String> getQueryTemplates() {
-		ArrayList<String> contributions = new ArrayList<String>();
+		ArrayList<String> contributions = new ArrayList<>();
 		boolean firstParam = true;
 		for (Node param : getChildren()) {
 			if (((ResourceParameter) param).getLocation().equals(TLParamLocation.QUERY.toString()))
@@ -347,7 +373,8 @@ public class ParamGroup extends ResourceBase<TLParamGroup> {
 	}
 
 	public void clearParameters() {
-		List<Node> params = new ArrayList<Node>(getChildren());
+		// LOGGER.debug("Clearing parameters from " + getName());
+		List<Node> params = new ArrayList<>(getChildren());
 		for (Node p : params)
 			p.delete();
 	}
@@ -390,12 +417,12 @@ public class ParamGroup extends ResourceBase<TLParamGroup> {
 		for (Node n : getOwningComponent().getSubject().getChildren()) {
 			String facetName = ResourceCodegenUtils.getActionFacetReferenceName((TLFacet) n.getTLModelObject());
 
-			if ((facetName != null) && facetName.equals(name) && n instanceof FacetNode) {
-				setReferenceFacet((FacetNode) n);
+			if ((facetName != null) && facetName.equals(name) && n instanceof FacetInterface) {
+				setReferenceFacet((FacetInterface) n);
 				return true; // denote change
 			}
 		}
-		LOGGER.debug("Could not find reference facet named: " + name);
+		// LOGGER.debug("Could not find reference facet named: " + name);
 		return false;
 	}
 
@@ -404,12 +431,16 @@ public class ParamGroup extends ResourceBase<TLParamGroup> {
 	 * 
 	 * @param n
 	 */
-	public void setReferenceFacet(FacetNode n) {
-		tlObj.setFacetRef((TLFacet) n.getTLModelObject());
+	public void setReferenceFacet(FacetInterface n) {
+		if (n != null)
+			tlObj.setFacetRef((TLFacet) n.getTLModelObject());
+		else
+			tlObj.setFacetRef(null);
+
 		upDateParameters();
 		if (tlObj.getName().isEmpty())
 			tlObj.setName(n.getName());
-		LOGGER.debug("Set reference facet to: " + tlObj.getFacetRefName());
+		// LOGGER.debug("Set reference facet to: " + tlObj.getFacetRefName());
 
 	}
 }

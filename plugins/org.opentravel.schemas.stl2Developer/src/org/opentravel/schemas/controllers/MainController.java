@@ -44,10 +44,7 @@ import org.opentravel.schemas.actions.ImportObjectToLibraryAction;
 import org.opentravel.schemas.node.ComponentNode;
 import org.opentravel.schemas.node.ModelNode;
 import org.opentravel.schemas.node.Node;
-import org.opentravel.schemas.node.Node.NodeVisitor;
-import org.opentravel.schemas.node.NodeVisitors;
 import org.opentravel.schemas.node.ProjectNode;
-import org.opentravel.schemas.node.ServiceNode;
 import org.opentravel.schemas.node.VersionNode;
 import org.opentravel.schemas.node.interfaces.INode;
 import org.opentravel.schemas.node.libraries.LibraryChainNode;
@@ -65,7 +62,6 @@ import org.opentravel.schemas.widgets.OtmHandlers;
 import org.opentravel.schemas.widgets.OtmSections;
 import org.opentravel.schemas.widgets.OtmTextFields;
 import org.opentravel.schemas.widgets.OtmWidgets;
-import org.opentravel.schemas.wizards.ChangeWizard;
 import org.opentravel.schemas.wizards.NewPropertiesWizard;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -111,6 +107,9 @@ public class MainController {
 
 	private ListenerList refreshList = new ListenerList();
 
+	/**
+	 * MUST only be created by OTM Registry. Use {@link OtmRegistry#getMainController()} to get the live copy.
+	 */
 	public MainController() {
 		this(getDefaultRepositoryManager());
 		// LOGGER.debug("MainController constructor complete.");
@@ -122,10 +121,11 @@ public class MainController {
 			defaultManager = RepositoryManager.getDefault();
 		} catch (RepositoryException ex) {
 			IStatus ss = new Status(IStatus.ERROR, Activator.PLUGIN_ID, ex.getMessage(), ex);
-			ErrorWithExceptionDialog.openError(PlatformUI.getWorkbench().getDisplay().getActiveShell(), JFaceResources
-					.getString("error"), MessageFormat.format(
-					Messages.getString("dialog.localRepository.error.message"),
-					RepositoryFileManager.getDefaultRepositoryLocation()), ss);
+			ErrorWithExceptionDialog.openError(PlatformUI.getWorkbench().getDisplay().getActiveShell(),
+					JFaceResources.getString("error"),
+					MessageFormat.format(Messages.getString("dialog.localRepository.error.message"),
+							RepositoryFileManager.getDefaultRepositoryLocation()),
+					ss);
 			LOGGER.error("Invalid local repository", ex);
 			PlatformUI.getWorkbench().close();
 		} catch (Exception e) {
@@ -134,6 +134,7 @@ public class MainController {
 		return defaultManager;
 	}
 
+	// FIXME - this should ONLY be called by OtmRegistry
 	public MainController(final RepositoryManager repositoryManager) {
 		// LOGGER.info("Initializing: " + this.getClass());
 
@@ -161,6 +162,7 @@ public class MainController {
 		repositoryController = new DefaultRepositoryController(this, repositoryManager);
 		// LOGGER.info("Initializing Project controller.");
 		projectController = new DefaultProjectController(this, repositoryManager);
+
 		LOGGER.info("Initialization complete. ");
 	}
 
@@ -197,10 +199,6 @@ public class MainController {
 		return modelController;
 	}
 
-	// public NodeModelController getNodeModelController() {
-	// return nodeModelController;
-	// }
-
 	/**
 	 * @return the projectController
 	 */
@@ -236,8 +234,11 @@ public class MainController {
 		return widgets;
 	}
 
+	/**
+	 * @return the workbench from the Platform UI or null.
+	 */
 	public IWorkbench getWorkbench() {
-		IWorkbench workbench;
+		IWorkbench workbench = null;
 		try {
 			workbench = PlatformUI.getWorkbench();
 		} catch (IllegalStateException e) {
@@ -269,25 +270,28 @@ public class MainController {
 		return OtmRegistry.getValidationResultsView();
 	}
 
+	// public ExampleView getView_Example() {
+	// return OtmRegistry.getExampleView();
+	// }
+
 	/** ************************ Current Item Access ***************************** **/
 
 	/**
 	 * @return the current node displayed in the type view facet table.
 	 */
 	public INode getCurrentNode_TypeView() {
-		return (INode) (OtmRegistry.getTypeView() != null ? OtmRegistry.getTypeView().getCurrentNode() : null);
+		return OtmRegistry.getTypeView() != null ? OtmRegistry.getTypeView().getCurrentNode() : null;
 	}
 
 	public INode getCurrentNode_FacetView() {
-		return (INode) (OtmRegistry.getFacetView() != null ? OtmRegistry.getFacetView().getCurrentNode() : null);
+		return OtmRegistry.getFacetView() != null ? OtmRegistry.getFacetView().getCurrentNode() : null;
 	}
 
 	/**
 	 * @return the node currently be viewed in the properties view.
 	 */
 	public INode getCurrentNode_PropertiesView() {
-		return (INode) (OtmRegistry.getPropertiesView() != null ? OtmRegistry.getPropertiesView().getCurrentNode()
-				: null);
+		return OtmRegistry.getPropertiesView() != null ? OtmRegistry.getPropertiesView().getCurrentNode() : null;
 	}
 
 	/**
@@ -349,7 +353,7 @@ public class MainController {
 	 * @return new list of selected navigator view nodes, possibly empty.
 	 */
 	public List<LibraryNode> getSelectedLibraries() {
-		final List<LibraryNode> libraries = new ArrayList<LibraryNode>();
+		final List<LibraryNode> libraries = new ArrayList<>();
 		final List<Node> nodes = getSelectedNodes_NavigatorView();
 		for (final Node node : nodes) {
 			if (node != null) {
@@ -377,7 +381,7 @@ public class MainController {
 	 * @return new list of selected navigator view nodes, possibly empty.
 	 */
 	public List<LibraryNode> getSelectedUserLibraries() {
-		final List<LibraryNode> libraries = new ArrayList<LibraryNode>();
+		final List<LibraryNode> libraries = new ArrayList<>();
 		for (final LibraryNode lib : getSelectedLibraries()) {
 			if (lib != null && lib.isTLLibrary()) {
 				libraries.add(lib);
@@ -427,7 +431,7 @@ public class MainController {
 	 * @return new list of selected navigator view nodes, possibly empty.
 	 */
 	public List<ComponentNode> getSelectedComponents_NavigatorView() {
-		final List<ComponentNode> componentNodes = new ArrayList<ComponentNode>();
+		final List<ComponentNode> componentNodes = new ArrayList<>();
 		final List<Node> sourceNodes = getSelectedNodes_NavigatorView();
 		for (final INode node : sourceNodes) {
 			if (node instanceof ComponentNode) {
@@ -584,93 +588,96 @@ public class MainController {
 
 	/** ********************* LEGACY BUSINESS LOGIC *************************** **/
 
-	/**
-	 * Runs change wizard on the selected component.
-	 */
-	public void changeTreeSelection() {
-		final Node n = getCurrentNode_NavigatorView();
-		if (n != null) {
-			changeNode((ComponentNode) n.getOwningComponent());
-		}
-	}
+	// /**
+	// * Runs change wizard on the selected component.
+	// */
+	// @Deprecated
+	// public void changeTreeSelection() {
+	// final Node n = getCurrentNode_NavigatorView();
+	// if (n != null) {
+	// changeNode((ComponentNode) n.getOwningComponent());
+	// }
+	// }
 
-	/**
-	 * Change the selected type view node. Used by change object action. 1) clones node 2) replaces everything that uses
-	 * the selected node as a type to use the clone 3) runs wizard with the cloned node. Wizard is responsible for
-	 * making any model changes directed by the user. 4a) original node replaced back into the model if the wizard is
-	 * cancelled. 4b) original node deleted if wizard completes normally. 5) clone moved to new library if necessary
-	 * (TODO -- wizard should do this)
-	 */
-	public void changeSelection() {
-		final Node selected = getSelectedNode_TypeView();
-		if (selected != null) {
-			final ComponentNode n = (ComponentNode) selected.getOwningComponent();
-			if (n != null) {
-				changeNode(n);
-			}
-		}
-	}
+	// /**
+	// * Change the selected type view node. Used by change object action. 1) clones node 2) replaces everything that
+	// uses
+	// * the selected node as a type to use the clone 3) runs wizard with the cloned node. Wizard is responsible for
+	// * making any model changes directed by the user. 4a) original node replaced back into the model if the wizard is
+	// * cancelled. 4b) original node deleted if wizard completes normally. 5) clone moved to new library if necessary
+	// * (TODO -- wizard should do this)
+	// */
+	// @Deprecated
+	// public void changeSelection() {
+	// final Node selected = getSelectedNode_TypeView();
+	// if (selected != null) {
+	// final ComponentNode n = (ComponentNode) selected.getOwningComponent();
+	// if (n != null) {
+	// changeNode(n);
+	// }
+	// }
+	// }
 
-	private void changeNode(final ComponentNode nodeToReplace) {
-
-		if (nodeToReplace == null || nodeToReplace.getLibrary() == null) {
-			LOGGER.error("Null in change node.");
-			return;
-		}
-		if (nodeToReplace instanceof ServiceNode || !nodeToReplace.isInTLLibrary()) {
-			LOGGER.warn("Invalid state. Cannot change " + nodeToReplace);
-			return;
-		}
-
-		// LOGGER.debug("Changing selected component: " + nodeToReplace.getName() + " with "
-		// + nodeToReplace.getTypeUsersCount() + " users.");
-
-		LibraryNode srcLib = nodeToReplace.getLibrary();
-		ComponentNode editedNode = nodeToReplace;
-
-		// LOGGER.debug("Changing Edited component: " + editedNode.getName() + " with "
-		// + editedNode.getTypeUsersCount() + " users.");
-
-		// Wizard must maintain the editedComponent active in the library.
-		final ChangeWizard wizard = new ChangeWizard(editedNode);
-		wizard.run(OtmRegistry.getActiveShell());
-		if (wizard.wasCanceled()) {
-			selectNavigatorNodeAndRefresh(nodeToReplace);
-		} else {
-			editedNode = wizard.getEditedComponent();
-			// If the library is different than the srcLib, the object needs to be moved.
-			// The library in the object is only an indicator of the library to move to.
-			// The edited node will be in the src Library.
-			if (!editedNode.getLibrary().equals(srcLib)) {
-				LibraryNode destLib = editedNode.getLibrary();
-				editedNode.setLibrary(srcLib);
-				srcLib.moveMember(editedNode, destLib);
-			}
-			if (editedNode != nodeToReplace) {
-				// Use the visitor because without a library it will not be delete-able.
-				NodeVisitor visitor = new NodeVisitors().new deleteVisitor();
-				nodeToReplace.visitAllNodes(visitor);
-				// nodeToReplace.delete();
-			}
-			selectNavigatorNodeAndRefresh(editedNode);
-			refresh(editedNode);
-
-			// LOGGER.info("Component after change: " + editedComponent + " with "
-			// + editedComponent.getTypeUsersCount() + " users.");
-		}
-		// LOGGER.debug("library has " + ln.getChildren_NamedTypes().size() + " children.");
-
-		// Test Result
-		// NodeModelTestUtils.testNodeModel();
-		// Validate the library after doing change.
-		// checkModelCounts(srcLib); // these don't work right with chains and contextual facets
-		// checkModelCounts(editedNode.getLibrary());
-		// }
-	}
+	// public void changeNode(final ComponentNode nodeToReplace) {
+	//
+	// if (nodeToReplace == null || nodeToReplace.getLibrary() == null) {
+	// LOGGER.error("Null in change node.");
+	// return;
+	// }
+	// if (nodeToReplace instanceof ServiceNode || !nodeToReplace.isInTLLibrary()) {
+	// LOGGER.warn("Invalid state. Cannot change " + nodeToReplace);
+	// return;
+	// }
+	//
+	// // LOGGER.debug("Changing selected component: " + nodeToReplace.getName() + " with "
+	// // + nodeToReplace.getTypeUsersCount() + " users.");
+	//
+	// LibraryNode srcLib = nodeToReplace.getLibrary();
+	// ComponentNode editedNode = nodeToReplace;
+	//
+	// // LOGGER.debug("Changing Edited component: " + editedNode.getName() + " with "
+	// // + editedNode.getTypeUsersCount() + " users.");
+	//
+	// // Wizard must maintain the editedComponent active in the library.
+	// final ChangeWizard wizard = new ChangeWizard(editedNode);
+	// wizard.run(OtmRegistry.getActiveShell());
+	// if (wizard.wasCanceled()) {
+	// selectNavigatorNodeAndRefresh(nodeToReplace);
+	// } else {
+	// editedNode = wizard.getEditedComponent();
+	// // If the library is different than the srcLib, the object needs to be moved.
+	// // The library in the object is only an indicator of the library to move to.
+	// // The edited node will be in the src Library.
+	// if (!editedNode.getLibrary().equals(srcLib)) {
+	// LibraryNode destLib = editedNode.getLibrary();
+	// editedNode.setLibrary(srcLib);
+	// srcLib.moveMember(editedNode, destLib);
+	// }
+	// if (editedNode != nodeToReplace) {
+	// // Use the visitor because without a library it will not be delete-able.
+	// NodeVisitor visitor = new NodeVisitors().new deleteVisitor();
+	// nodeToReplace.visitAllNodes(visitor);
+	// // nodeToReplace.delete();
+	// }
+	// selectNavigatorNodeAndRefresh(editedNode);
+	// refresh(editedNode);
+	//
+	// // LOGGER.info("Component after change: " + editedComponent + " with "
+	// // + editedComponent.getTypeUsersCount() + " users.");
+	// }
+	// // LOGGER.debug("library has " + ln.getChildren_NamedTypes().size() + " children.");
+	//
+	// // Test Result
+	// // NodeModelTestUtils.testNodeModel();
+	// // Validate the library after doing change.
+	// // checkModelCounts(srcLib); // these don't work right with chains and contextual facets
+	// // checkModelCounts(editedNode.getLibrary());
+	// // }
+	// }
 
 	public static boolean checkModelCounts(final LibraryNode lib) {
 		int tlCount = 0, guiCount = 0;
-		guiCount = lib.getDescendants_LibraryMembers().size();
+		guiCount = lib.getDescendants_LibraryMembersAsNodes().size();
 		tlCount = lib.getTLaLib().getNamedMembers().size();
 		if (guiCount != tlCount) {
 			LOGGER.error("GUI member count " + guiCount + " is out of sync with TL model " + tlCount + ".");
@@ -803,19 +810,17 @@ public class MainController {
 						desktop.browse(new URI(path));
 					} else {
 						DialogUserNotifier.openError("Open file", "Could not find the file associated to the library "
-								+ lib.getName() + " (" + path + ")");
+								+ lib.getName() + " (" + path + ")", null);
 					}
 				} else {
 					desktop.open(file);
 				}
 			} catch (final IOException e) {
-				LOGGER.error("While opening library file in system editor " + e.getMessage(), e);
 				DialogUserNotifier.openError("Open file",
-						"Could not open the file, an error occurred: " + e.getMessage());
+						"Could not open the file, an error occurred: " + e.getMessage(), e);
 			} catch (final URISyntaxException e) {
-				LOGGER.error("While opening library file in system editor " + e.getMessage(), e);
 				DialogUserNotifier.openError("Open file",
-						"Could not open the file, its URI is malformed: " + e.getMessage());
+						"Could not open the file, its URI is malformed: " + e.getMessage(), e);
 			}
 		}
 	}
@@ -850,19 +855,26 @@ public class MainController {
 
 	/**
 	 * @return Selected nodes in TypeView. If selection of TypeView is empty then return selected nodes from
-	 *         NavigatorView otherwise return empty list;
+	 *         NavigatorView otherwise return empty list; Null if no workbench active page.
 	 */
 	public List<Node> getGloballySelectNodes() {
-		IWorkbenchPage page = PlatformUI.getWorkbench().getActiveWorkbenchWindow().getActivePage();
-		IWorkbenchPart part = page.getActivePart();
+		// IWorkbenchPage page = getActivePage();
+		// if (PlatformUI.getWorkbench() != null)
+		// if (PlatformUI.getWorkbench().getActiveWorkbenchWindow() != null)
+		// page = PlatformUI.getWorkbench().getActiveWorkbenchWindow().getActivePage();
+		// if (page == null)
+		// return null;
+
+		// IWorkbenchPart part = page.getActivePart();
+		IWorkbenchPart part = getActivePart();
 		// FYI- this works: IViewPart view = page.findView(NavigatorView.VIEW_ID);
 
 		List<Node> nodes = getSelectedNodes_TypeView();
 		if (part instanceof OtmView)
 			nodes = ((OtmView) part).getSelectedNodes();
 
-		// This should never happen
-		assert nodes != null;
+		// This should never happen - but does when context view is open
+		// assert nodes != null;
 		if (nodes == null || nodes.isEmpty()) {
 			nodes = getSelectedNodes_NavigatorView();
 		}
@@ -872,4 +884,19 @@ public class MainController {
 		return nodes;
 	}
 
+	/**
+	 * Determine if the workbench has an active page. On startup, the page will be null.
+	 * 
+	 * @return active workbench page or null
+	 */
+	public IWorkbenchPart getActivePart() {
+		IWorkbenchPage page = null;
+		if (PlatformUI.getWorkbench() != null)
+			if (PlatformUI.getWorkbench().getActiveWorkbenchWindow() != null)
+				page = PlatformUI.getWorkbench().getActiveWorkbenchWindow().getActivePage();
+		if (page == null)
+			return null;
+
+		return page.getActivePart();
+	}
 }

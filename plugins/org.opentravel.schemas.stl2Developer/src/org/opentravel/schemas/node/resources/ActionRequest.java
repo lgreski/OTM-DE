@@ -96,7 +96,7 @@ public class ActionRequest extends ResourceBase<TLActionRequest> implements Reso
 
 		if (parent.getRequest() != null)
 			parent.getRequest().delete();
-		((TLAction) parent.getTLModelObject()).setRequest(tlObj);
+		parent.getTLModelObject().setRequest(tlObj);
 
 		setPathTemplate();
 	}
@@ -138,8 +138,18 @@ public class ActionRequest extends ResourceBase<TLActionRequest> implements Reso
 	}
 
 	@Override
+	public String getDecoration() {
+		String decoration = "  (";
+		decoration += getHttpMethodAsString() + " ";
+		decoration += getPayloadName();
+		if (getParamGroup() != null)
+			decoration += " with " + getParamGroup() + " parameters";
+		return decoration + ")";
+	}
+
+	@Override
 	public List<ResourceField> getFields() {
-		List<ResourceField> fields = new ArrayList<ResourceField>();
+		List<ResourceField> fields = new ArrayList<>();
 
 		// Payload - Pass list of Action Facet names to select from
 		new ResourceField(fields, getPayloadName(), MSGKEY + ".fields.payload", ResourceFieldType.Enum,
@@ -175,7 +185,7 @@ public class ActionRequest extends ResourceBase<TLActionRequest> implements Reso
 
 	@Override
 	public String getName() {
-		return getParent().getName() + "_Request";
+		return getParent() != null ? getParent().getName() + "_Request" : "";
 	}
 
 	public ParamGroup getParamGroup() {
@@ -253,15 +263,15 @@ public class ActionRequest extends ResourceBase<TLActionRequest> implements Reso
 	public boolean setParamGroup(String groupName) {
 		if (groupName == null || groupName.equals(ResourceField.NONE)) {
 			tlObj.setParamGroup(null);
-			LOGGER.debug("Set parameter group to null. " + groupName);
+			// LOGGER.debug("Set parameter group to null. " + groupName);
 		} else if (tlObj.getParamGroupName() != null && tlObj.getParamGroupName().equals(groupName)) {
-			LOGGER.debug("No change because names are the same. " + groupName);
+			// LOGGER.debug("No change because names are the same. " + groupName);
 			return false;
 		} else
 			// find the param group with this name then set it
 			for (ParamGroup node : getOwningComponent().getParameterGroups(false))
-				if (node.getName().equals(groupName))
-					setParameterGroup(node);
+			if (node.getName().equals(groupName))
+			setParameterGroup(node);
 		// LOGGER.debug("Set parameter group to " + groupName + " : " + tlObj.getParamGroupName());
 
 		pathTemplate.setParameters();
@@ -272,9 +282,11 @@ public class ActionRequest extends ResourceBase<TLActionRequest> implements Reso
 	// TODO - ADD TO JUNIT - remove old listener, add listeners to children parameters
 	protected boolean setParameterGroup(ParamGroup group) {
 		// Remove old listeners
-		if (tlObj != null && tlObj.getParamGroup() != null)
-			((ParamGroup) getNode(tlObj.getParamGroup().getListeners())).removeListeners(this);
-
+		if (tlObj != null && tlObj.getParamGroup() != null) {
+			Node n = getNode(tlObj.getParamGroup().getListeners());
+			if (n instanceof ParamGroup)
+				((ParamGroup) n).removeListeners(this);
+		}
 		if (group != null) {
 			tlObj.setParamGroup(group.tlObj);
 			group.addListeners(this);
@@ -316,6 +328,9 @@ public class ActionRequest extends ResourceBase<TLActionRequest> implements Reso
 		setPathTemplate();
 	}
 
+	/**
+	 * Update the path template based on contents of the resource.
+	 */
 	public void setPathTemplate() {
 		assert pathTemplate != null;
 		tlObj.setPathTemplate(pathTemplate.get());

@@ -70,7 +70,7 @@ public class OtmRegistry {
 	 * @return all active otmViews ( extension of eclipse view parts )
 	 */
 	public static List<OtmView> getAllActiveViews() {
-		List<OtmView> views = new ArrayList<OtmView>();
+		List<OtmView> views = new ArrayList<>();
 		if (exampleView != null)
 			views.add(exampleView);
 		if (exampleJsonView != null)
@@ -92,27 +92,29 @@ public class OtmRegistry {
 		return (views);
 	}
 
-	/**
-	 * @return the exampleJsonView
-	 */
-	public static ExampleJsonView getExampleJsonView() {
-		return exampleJsonView;
-	}
+	// /**
+	// * @return the exampleJsonView
+	// */
+	// @Deprecated
+	// public static ExampleJsonView getExampleJsonView() {
+	// return exampleJsonView;
+	// }
 
 	/**
 	 * @param exampleJsonView
 	 *            the exampleJsonView to set
 	 */
+	@Deprecated
 	public static void registerExampleJsonView(final ExampleJsonView exampleJsonView) {
 		OtmRegistry.exampleJsonView = exampleJsonView;
 	}
 
-	/**
-	 * @return the exampleXmlView
-	 */
-	public static ExampleXmlView getExampleXmlView() {
-		return exampleXmlView;
-	}
+	// /**
+	// * @return the exampleXmlView
+	// */
+	// public static ExampleXmlView getExampleXmlView() {
+	// return exampleXmlView;
+	// }
 
 	/**
 	 * @param exampleXmlView
@@ -142,13 +144,14 @@ public class OtmRegistry {
 		if (OtmRegistry.mainWindow != null)
 			LOGGER.debug("Registering ANOTHER main window.");
 		OtmRegistry.mainWindow = mainWindow;
-		// LOGGER.info("Registered MainWindow");
+		LOGGER.info("Registered MainWindow");
 	}
 
 	/**
 	 * @return the exampleView
 	 */
-	public static OtmView getExampleView() {
+	@Deprecated
+	public static ExampleView getExampleView() {
 		return exampleView;
 	}
 
@@ -156,6 +159,7 @@ public class OtmRegistry {
 	 * @param exampleView
 	 *            the exampleView to set
 	 */
+	@Deprecated
 	public static void registerExampleView(final ExampleView exampleView) {
 		OtmRegistry.exampleView = exampleView;
 		// LOGGER.info("Registered ExampleView");
@@ -187,6 +191,7 @@ public class OtmRegistry {
 		if (navigatorView == null) {
 			RCPUtils.findOrCreateView(NavigatorView.VIEW_ID);
 		}
+
 		return navigatorView;
 	}
 
@@ -291,26 +296,22 @@ public class OtmRegistry {
 	}
 
 	/**
-	 * @return null if headless or unable to get workbench or shell
+	 * @return active workbench shell or null if headless or unable to get workbench or shell
 	 */
 	public static Shell getActiveShell() {
-		// if (!mainWindow.hasDisplay())
-		// return null;
-		// try {
-		// if (PlatformUI.getWorkbench() == null)
-		// return null;
-		// } catch (IllegalStateException e) {
-		// // TODO Auto-generated catch block
-		// e.printStackTrace();
-		// }
-		if (PlatformUI.getWorkbench().getActiveWorkbenchWindow() == null)
-			return null;
-		return PlatformUI.getWorkbench().getActiveWorkbenchWindow().getShell();
+		// You can't catch the exception from getWorkbench() so must test first.
+		if (PlatformUI.isWorkbenchRunning())
+			if (PlatformUI.getWorkbench() != null)
+				if (PlatformUI.getWorkbench().getActiveWorkbenchWindow() != null)
+					return PlatformUI.getWorkbench().getActiveWorkbenchWindow().getShell();
+		return null;
 	}
 
 	public static void registerMainController(MainController mainController) {
-		if (OtmRegistry.mainController != null)
-			LOGGER.debug("Registering ANOTHER main controller.see Import_Tests.beforeEachTest() for proper usage.");
+		if (OtmRegistry.mainController != null) {
+			LOGGER.error("Registering ANOTHER main controller.see Import_Tests.beforeEachTest() for proper usage.");
+			// assert false;
+		}
 		OtmRegistry.mainController = mainController;
 	}
 
@@ -340,6 +341,30 @@ public class OtmRegistry {
 
 	public static RestResourceView getResourceView() {
 		return resourceView;
+	}
+
+	/**
+	 * Close (dispose) views that have been removed from OTM-DE
+	 */
+	public static void closeDeprecatedViews() {
+		// TODO create delegated isDeprecated() method for views
+		// LOGGER.debug("Closing views: " + exampleJsonView + " " + exampleXmlView);
+
+		// Hide the view which disposes of the widget and its contents.
+		if (exampleJsonView != null)
+			if (exampleJsonView.getSite() != null)
+				if (exampleJsonView.getSite().getPage() != null)
+					exampleJsonView.getSite().getPage().hideView(exampleJsonView);
+
+		if (exampleXmlView != null)
+			if (exampleXmlView.getSite() != null)
+				if (exampleXmlView.getSite().getPage() != null)
+					exampleXmlView.getSite().getPage().hideView(exampleXmlView);
+
+		if (exampleView != null)
+			if (exampleView.getSite() != null)
+				if (exampleView.getSite().getPage() != null)
+					exampleView.getSite().getPage().hideView(exampleView);
 	}
 
 }

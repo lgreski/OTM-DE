@@ -16,13 +16,13 @@
 package org.opentravel.schemas.bugs;
 
 import org.junit.Test;
-import org.opentravel.schemas.node.AliasNode;
-import org.opentravel.schemas.node.BusinessObjectNode;
 import org.opentravel.schemas.node.Node;
 import org.opentravel.schemas.node.ServiceNode;
-import org.opentravel.schemas.node.facets.OperationNode;
-import org.opentravel.schemas.node.facets.OperationNode.ResourceOperationTypes;
 import org.opentravel.schemas.node.libraries.LibraryNode;
+import org.opentravel.schemas.node.objectMembers.OperationNode;
+import org.opentravel.schemas.node.objectMembers.OperationNode.ServiceOperationTypes;
+import org.opentravel.schemas.node.typeProviders.AliasNode;
+import org.opentravel.schemas.node.typeProviders.facetOwners.BusinessObjectNode;
 import org.opentravel.schemas.utils.BaseProjectTest;
 import org.opentravel.schemas.utils.ComponentNodeBuilder;
 import org.opentravel.schemas.utils.LibraryNodeBuilder;
@@ -47,7 +47,7 @@ public class RemoveBOAliasWithService extends BaseProjectTest {
         ServiceNode service = ComponentNodeBuilder.createService("Service", local1)
                 .createCRUDQOperations(bo).get();
         OperationNode newOperation = new OperationNode(service, "Query",
-                ResourceOperationTypes.QUERY, bo);
+                ServiceOperationTypes.QUERY, bo);
 
         newOperation.getDescendants_TypeUsers().get(0).setAssignedType(getAliasNode(bo));
         bo.delete();

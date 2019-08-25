@@ -20,7 +20,10 @@ import java.util.List;
 
 import org.eclipse.swt.graphics.Image;
 import org.opentravel.schemacompiler.model.TLModelElement;
+import org.opentravel.schemas.node.handlers.children.ChildrenHandlerI;
 import org.opentravel.schemas.node.interfaces.FacadeInterface;
+import org.opentravel.schemas.node.interfaces.LibraryMemberInterface;
+import org.opentravel.schemas.node.libraries.LibraryNode;
 import org.opentravel.schemas.node.listeners.BaseNodeListener;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -40,33 +43,54 @@ public class VersionNode extends ComponentNode implements FacadeInterface {
 	protected VersionManager vm = null;
 
 	/**
-	 * Create an empty version node linked to its parent.
+	 * Create a version node to wrap the passed node.
+	 * 
+	 * @param node
 	 */
-	public VersionNode(AggregateNode parent) {
+	public VersionNode(ComponentNode node) {
 		vm = new VersionManager();
-		setLibrary(parent.getLibrary());
-		setParent(parent);
-		parent.getChildren().add(this);
 		versionNode = this; // make getVersionNode() tests simpler
+		add(node);
 	}
 
-	/**
-	 * Create a new version node and add the node.
-	 * 
-	 * @param parent
-	 * @param nodeToAdd
-	 */
-	public VersionNode(AggregateNode parent, ComponentNode nodeToAdd) {
-		this(parent);
-		add(nodeToAdd);
-	}
+	// /**
+	// * Create an empty version node linked to its parent.
+	// */
+	// @Deprecated
+	// public VersionNode(AggregateNode parent) {
+	// vm = new VersionManager();
+	// setLibrary(parent.getLibrary());
+	// setParent(parent);
+	// parent.getChildren().add(this);
+	// versionNode = this; // make getVersionNode() tests simpler
+	// }
+
+	// /**
+	// * Create a new version node and add the node.
+	// *
+	// * @param parent
+	// * @param nodeToAdd
+	// */
+	// @Deprecated
+	// public VersionNode(AggregateNode parent, ComponentNode nodeToAdd) {
+	// this(parent);
+	// add(nodeToAdd);
+	// }
 
 	/**
 	 * Add the passed node to the versioned object chain and set this as the versionNode in the nodeToAdd
 	 */
 	public void add(Node nodeToAdd) {
-		vm.add(nodeToAdd);
-		nodeToAdd.setVersionNode(this);
+		if (nodeToAdd != null) {
+			vm.add(nodeToAdd);
+			nodeToAdd.setVersionNode(this);
+		}
+	}
+
+	@Override
+	public void close() {
+		vm.close();
+		deleted = true;
 	}
 
 	/**
@@ -74,11 +98,20 @@ public class VersionNode extends ComponentNode implements FacadeInterface {
 	 * 
 	 * @return node or null
 	 */
+	@Override
 	public Node get() {
 		return vm.get();
 		// TODO - why are some children empty?
 		// return getChildren().isEmpty() ? vm.get() : getChildren().get(0);
 		// return vm.get();
+	}
+
+	@Override
+	/**
+	 * Get head's parameterized children handler
+	 */
+	public ChildrenHandlerI<?> getChildrenHandler() {
+		return get() != null ? get().getChildrenHandler() : null;
 	}
 
 	@Override
@@ -103,13 +136,28 @@ public class VersionNode extends ComponentNode implements FacadeInterface {
 	@Override
 	public String getComponentType() {
 		return vm.get() != null ? vm.get().getComponentType() : "";
-		// return vm.get() != null ? vm.get().getComponentNodeType().getDescription() : "";
 	}
 
 	@Override
 	public Image getImage() {
-		return vm.get().getImage();
-		// return Images.getImageRegistry().get(Images.libraryChain);
+		return vm.get() != null ? vm.get().getImage() : null;
+	}
+
+	/**
+	 * @return library of head version
+	 */
+	@Override
+	public LibraryNode getLibrary() {
+		return vm.get() != null ? vm.get().getLibrary() : null;
+		// return parent != null ? parent.getLibrary() : null;
+	}
+
+	/**
+	 * @return parent of head version
+	 */
+	@Override
+	public Node getParent() {
+		return vm.get() != null ? vm.get().getParent() : null;
 	}
 
 	@Override
@@ -124,11 +172,11 @@ public class VersionNode extends ComponentNode implements FacadeInterface {
 		return vm.get() != null ? vm.get().getNavChildren(deep) : Collections.EMPTY_LIST;
 	}
 
-	@Override
-	public List<Node> getTreeChildren(boolean deep) {
-		// this simplifies links from validation, user experience and showing families in the other aggregates.
-		return vm.get() != null ? vm.get().getTreeChildren(deep) : Collections.EMPTY_LIST;
-	}
+	// @Override
+	// public List<Node> getTreeChildren(boolean deep) {
+	// // this simplifies links from validation, user experience and showing families in the other aggregates.
+	// return vm.get() != null ? vm.get().getChildrenHandler().getTreeChildren(deep) : Collections.EMPTY_LIST;
+	// }
 
 	@Override
 	public boolean hasNavChildren(boolean deep) {
@@ -158,20 +206,29 @@ public class VersionNode extends ComponentNode implements FacadeInterface {
 	/**
 	 * @return true if this is new to the chain (prevNode == null). Fast and efficient.
 	 */
+	@Override
 	public boolean isNewToChain() {
 		return vm.getPreviousVersion() == null ? true : false;
 	}
 
+	/**
+	 * Version node is considered deleted when its head object is deleted
+	 */
+	@Override
+	public boolean isDeleted() {
+		return get() != null ? get().isDeleted() : true;
+	}
+
 	@Override
 	public boolean isEditable() {
-		return get().isEditable();
+		return get() != null ? get().isEditable() : false;
 	}
 
 	/**
 	 * Return owning component of head object
 	 */
 	@Override
-	public Node getOwningComponent() {
+	public LibraryMemberInterface getOwningComponent() {
 		return vm.get() != null ? vm.get().getOwningComponent() : null;
 	}
 
@@ -206,7 +263,6 @@ public class VersionNode extends ComponentNode implements FacadeInterface {
 	 * Remove passed child from this version node's version list. If there are no objects remaining in the version list,
 	 * the version node is removed from the aggregate parent.
 	 */
-	@Override
 	protected void remove(final Node node) {
 		assert node != null;
 		assert getChain() != null;
@@ -215,11 +271,16 @@ public class VersionNode extends ComponentNode implements FacadeInterface {
 		vm.remove(node);
 
 		// If no more versions, then remove version node
-		if (vm.get() == null)
+		if (vm.get() == null) {
 			if (getParent() != null) {
-				getParent().remove(this);
-				node.setVersionNode(null);
+				// NavNode is static -- remove not clear
+				if (getParent() instanceof NavNode && node instanceof LibraryMemberInterface)
+					((NavNode) getParent()).removeLM((LibraryMemberInterface) node);
+				setParent(null);
 			}
+			deleted = true;
+			node.setVersionNode(null);
+		}
 	}
 
 	@Override
@@ -238,6 +299,7 @@ public class VersionNode extends ComponentNode implements FacadeInterface {
 	/**
 	 * @return true if this version object chain contains the passed node
 	 */
+	@Override
 	public boolean contains(Node node) {
 		return vm.contains(node);
 	}

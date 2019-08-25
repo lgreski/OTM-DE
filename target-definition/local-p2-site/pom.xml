@@ -11,9 +11,25 @@
 	</parent>
 	
 	<artifactId>org.opentravel.schemas.stl2Developer.p2Site</artifactId>
-	<packaging>pom</packaging>
-
+	<packaging>war</packaging>
+	
+	<properties>
+		<deploy.host>ec2-18-191-4-96.us-east-2.compute.amazonaws.com</deploy.host>
+	</properties>
+	
 	<build>
+		<extensions>
+			<extension>
+				<groupId>org.apache.maven.wagon</groupId>
+				<artifactId>wagon-ssh</artifactId>
+				<version>3.3.2</version>
+			</extension>
+			<extension>
+				<groupId>org.apache.maven.wagon</groupId>
+				<artifactId>wagon-ssh-external</artifactId>
+				<version>3.3.2</version>
+			</extension>
+		</extensions>
 		<plugins>
 			<plugin>
 				<groupId>org.reficio</groupId>
@@ -59,18 +75,95 @@
 			</plugin>
 
 			<plugin>
-				<groupId>org.mortbay.jetty</groupId>
+				<groupId>org.eclipse.jetty</groupId>
 				<artifactId>jetty-maven-plugin</artifactId>
-				<version>8.1.16.v20140903</version>
+				<version>9.4.14.v20181114</version>
 				<configuration>
 					<scanIntervalSeconds>10</scanIntervalSeconds>
 					<webAppSourceDirectory>${basedir}/target/repository/</webAppSourceDirectory>
 					<webApp>
 						<contextPath>/site</contextPath>
 					</webApp>
+					<httpConnector>
+						<port>9090</port>
+					</httpConnector>
+					<daemon>true</daemon>
+					<stopPort>9091</stopPort>
+					<stopKey>stop-otm-p2</stopKey>
+					<stopWait>10</stopWait>
 				</configuration>
 			</plugin>
+			
+			<plugin>
+				<groupId>org.codehaus.mojo</groupId>
+				<artifactId>wagon-maven-plugin</artifactId>
+				<version>2.0.0</version>
+				<executions>
+					<execution>
+						<id>clean-p2-server</id>
+						<phase>deploy</phase>
+						<goals>
+							<goal>sshexec</goal>
+						</goals>
+						<configuration>
+							<serverId>otm-p2-server</serverId>
+							<url>scp://${deploy.host}</url>
+							<commands>
+								<command>rm -rf /var/www/html/otm-de/p2site/*</command>
+							</commands>
+						</configuration>
+					</execution>
+					<execution>
+						<id>upload-p2-server</id>
+						<phase>deploy</phase>
+						<goals>
+							<goal>upload</goal>
+						</goals>
+						<configuration>
+							<serverId>otm-p2-server</serverId>
+							<url>scp://${deploy.host}</url>
+							<fromDir>${basedir}/target/repository</fromDir>
+							<toDir>/var/www/html/otm-de/p2site</toDir>
+						</configuration>
+					</execution>
+				</executions>
+			</plugin>
+			
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-war-plugin</artifactId>
+				<version>3.2.2</version>
+				<configuration>
+					<skip>true</skip>
+				</configuration>
+			</plugin>
+			
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-jar-plugin</artifactId>
+				<version>3.1.1</version>
+				<configuration>
+					<skip>true</skip>
+				</configuration>
+			</plugin>
+			
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-install-plugin</artifactId>
+				<configuration>
+					<skip>true</skip>
+				</configuration>
+			</plugin>
+			
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-deploy-plugin</artifactId>
+				<configuration>
+					<skip>true</skip>
+				</configuration>
+			</plugin>
+			
 		</plugins>
 	</build>
-
+	
 </project>

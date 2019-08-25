@@ -27,15 +27,19 @@ package org.opentravel.schemas.trees.library;
  * @author Dave Hollander
  */
 
+import java.util.Collections;
+
 import org.eclipse.jface.viewers.ITreeContentProvider;
 import org.eclipse.jface.viewers.Viewer;
 import org.opentravel.schemas.node.Node;
 import org.opentravel.schemas.node.interfaces.INode;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class LibraryTreeContentProvider implements ITreeContentProvider {
-	// private static final Logger LOGGER = LoggerFactory.getLogger(LibraryTreeContentProvider.class);
+	private static final Logger LOGGER = LoggerFactory.getLogger(LibraryTreeContentProvider.class);
 
-	private boolean deepMode = false;
+	private boolean deepMode = false; // When true, include properties in tree children lists.
 
 	public LibraryTreeContentProvider() {
 		deepMode = false;
@@ -67,16 +71,22 @@ public class LibraryTreeContentProvider implements ITreeContentProvider {
 	 */
 	@Override
 	public Object[] getChildren(final Object element) {
-		if (element instanceof Node) {
-			return ((Node) element).getTreeChildren(deepMode).toArray();
-		}
-		throw new IllegalArgumentException("getChildren was not passed a node. Element is " + element);
+		// if (element instanceof TypeProviderWhereUsedNode)
+		// LOGGER.debug("Get where used children of: " + ((TypeProviderWhereUsedNode) element).getOwner());
+		if (element instanceof Node && ((Node) element).getChildrenHandler() != null)
+			return ((Node) element).getChildrenHandler().getTreeChildren(deepMode).toArray();
+		else
+			return Collections.emptyList().toArray();
+		// throw new IllegalArgumentException("getChildren was not passed a node. Element is " + element);
 	}
 
 	@Override
 	public boolean hasChildren(final Object element) {
-		if (element instanceof Node)
-			return ((Node) element).hasTreeChildren(deepMode);
+		// if (element instanceof TypeProviderWhereUsedNode)
+		// LOGGER.debug("Has where used children of: " + ((TypeProviderWhereUsedNode) element).getOwner() + "? "
+		// + ((Node) element).getChildrenHandler().hasTreeChildren(deepMode));
+		if (element instanceof Node && ((Node) element).getChildrenHandler() != null)
+			return ((Node) element).getChildrenHandler().hasTreeChildren(deepMode);
 		return false;
 	}
 

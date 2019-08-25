@@ -23,11 +23,12 @@ import org.opentravel.schemacompiler.validate.FindingMessageFormat;
 import org.opentravel.schemacompiler.validate.FindingType;
 import org.opentravel.schemacompiler.validate.ValidationFindings;
 import org.opentravel.schemacompiler.validate.compile.TLModelCompileValidator;
-import org.opentravel.schemas.node.ImpliedNode;
 import org.opentravel.schemas.node.Node;
+import org.opentravel.schemas.node.interfaces.InheritedInterface;
 import org.opentravel.schemas.node.libraries.LibraryChainNode;
 import org.opentravel.schemas.node.libraries.LibraryNavNode;
 import org.opentravel.schemas.node.libraries.LibraryNode;
+import org.opentravel.schemas.node.typeProviders.ImpliedNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -89,12 +90,16 @@ public class ValidationManager {
 	public static boolean isValid(Node node) {
 		if (node instanceof ImpliedNode)
 			return true;
+		if (node instanceof InheritedInterface)
+			return true; // Out of context the compiler may flag invalid errors or warnings
 		if (node == null || node.getLibrary() == null)
 			return false;
 		if (node.getLibrary().isBuiltIn())
 			return true; // skip built in libraries and their content
 		ValidationFindings findings = validate(node);
-		return findings != null && findings.count(FindingType.ERROR) == 0 ? true : false;
+		if (findings == null)
+			return true;
+		return findings.count(FindingType.ERROR) == 0 ? true : false;
 	}
 
 	/**
@@ -139,15 +144,17 @@ public class ValidationManager {
 	 *            Model object
 	 * @return return findings
 	 */
-	public static ValidationFindings validate(TLModelElement tlObj, boolean deep) {
-		block();
+	public static synchronized ValidationFindings validate(TLModelElement tlObj, boolean deep) {
+		// block();
 		ValidationFindings findings = null;
 		try {
 			findings = TLModelCompileValidator.validateModelElement(tlObj, deep);
 		} catch (Exception e) {
 			// LOGGER.debug("Validation threw error: " + e.getLocalizedMessage());
 		}
-		unblock();
+		// finally {
+		//// unblock();
+		// }
 		// logFindings(findings);
 		return findings;
 	}

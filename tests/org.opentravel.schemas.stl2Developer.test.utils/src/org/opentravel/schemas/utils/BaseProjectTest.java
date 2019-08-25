@@ -29,15 +29,20 @@ import org.junit.BeforeClass;
 import org.opentravel.schemacompiler.repository.RepositoryException;
 import org.opentravel.schemacompiler.saver.LibrarySaveException;
 import org.opentravel.schemas.controllers.DefaultRepositoryController;
-import org.opentravel.schemas.controllers.LibraryModelManager;
 import org.opentravel.schemas.controllers.MainController;
 import org.opentravel.schemas.controllers.ProjectController;
+import org.opentravel.schemas.node.ModelNode;
 import org.opentravel.schemas.node.Node;
+import org.opentravel.schemas.node.NodeFinders;
 import org.opentravel.schemas.node.ProjectNode;
 import org.opentravel.schemas.node.libraries.LibraryNode;
+import org.opentravel.schemas.node.typeProviders.SimpleTypeNode;
 import org.opentravel.schemas.stl2Developer.reposvc.RepositoryTestUtils;
+import org.opentravel.schemas.stl2developer.OtmRegistry;
 import org.opentravel.schemas.trees.repository.RepositoryNode;
 import org.osgi.framework.Version;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Abstract base class that defines common methods used during live repository testing.
@@ -45,60 +50,100 @@ import org.osgi.framework.Version;
  * @author Pawel Jedruch
  */
 public abstract class BaseProjectTest {
+	private static final Logger LOGGER = LoggerFactory.getLogger(BaseProjectTest.class);
+
+	protected static DefaultRepositoryController rc;
+	protected static ProjectNode testProject;
 
 	protected static File tmpWorkspace;
-	protected static DefaultRepositoryController rc;
+	private static List<ProjectNode> projectsToClean = new ArrayList<>();
+
 	protected static MainController mc;
 	protected static ProjectController pc;
-	protected static ProjectNode testProject;
-	private static List<ProjectNode> projectsToClean = new ArrayList<ProjectNode>();
+	protected static ProjectNode defaultProject;
 
+	// Takes about 40-60 seconds
 	@BeforeClass
-	public final static void beforeTests() throws Exception {
+	public static void beforeTests() throws Exception {
+		LOGGER.debug("Before class tests - cleaning project workspace.");
 		tmpWorkspace = new File(System.getProperty("user.dir"), "/target/test-workspace/");
 		RepositoryTestUtils.deleteContents(tmpWorkspace);
 		tmpWorkspace.deleteOnExit();
-		mc = new MainController();
+		mc = OtmRegistry.getMainController();
+		// mc = new MainController(); // Loads the built-in libraries.
 		rc = (DefaultRepositoryController) mc.getRepositoryController();
 		pc = mc.getProjectController();
+		defaultProject = pc.getDefaultProject();
+
+		SimpleTypeNode sn = (SimpleTypeNode) NodeFinders.findNodeByName("ID", ModelNode.XSD_NAMESPACE);
+		if (sn == null)
+			LOGGER.error("Missing simple type ID.");
+
+		assert OtmRegistry.getMainController() == mc;
+		assert NodeFinders.findNodeByName("ID", ModelNode.XSD_NAMESPACE) != null;
+		assert pc.getBuiltInProject() != null;
+		LOGGER.debug("Before class tests cleaned workspace: " + tmpWorkspace.getPath());
 	}
 
 	@Before
 	public void beforeEachTest() throws Exception {
+		LOGGER.debug("Before Each Test");
+		pc.closeAll();
+		Node.getLibraryModelManager().clear(false);
+		defaultProject = pc.getDefaultProject();
+
+		assert rc.getLocalRepository() != null;
 		testProject = createProject("Otm-Test-TestProject", rc.getLocalRepository(), "IT");
-		callBeforeEachTest();
+		assertTrue(testProject != null);
+		LOGGER.debug("Before Each Test end.");
 	}
 
+	@Deprecated
 	protected void callBeforeEachTest() throws Exception {
-		// Do nothing
+		LOGGER.debug("Before tests");
+		pc.closeAll();
+		testProject = createProject("Otm-Test-TestProject", rc.getLocalRepository(), "IT");
+		assertTrue(testProject != null);
+		// Give access to the sub-classes
 	}
 
 	@After
 	public void afterEachTest() throws RepositoryException, IOException {
-		LibraryModelManager mgr = Node.getLibraryModelManager();
-		int userLibCount = mgr.getUserLibraries().size();
-		List<LibraryNode> userLibs = mgr.getUserLibraries();
+		LOGGER.debug("After Each Test - starting project clean up");
 
-		pc.getDefaultProject().removeAllFromTLProject();
-		pc.closeAll();
-
-		for (ProjectNode pn : projectsToClean) {
-			File projFile = pn.getTLProject().getProjectFile().getParentFile();
-			System.out.println("Cleaning project: " + pn + "  file = " + projFile.toString());
-			RepositoryTestUtils.deleteContents(projFile);
-		}
+		// Get file list before closing the projects
+		ArrayList<File> filesToClean = new ArrayList<>();
+		for (ProjectNode pn : projectsToClean)
+			filesToClean.add(pn.getTLProject().getProjectFile().getParentFile());
 		projectsToClean.clear();
 
-		// The built in project will continue to have libraries in them.
+		pc.closeAll();
+		// Node.getLibraryModelManager().clear(false);
+		defaultProject = pc.getDefaultProject(); // close all creates a new defaultProject
+
+		// use file list from super.afterEachTest()
+		for (File projFile : filesToClean) {
+			LOGGER.debug("Cleaning project file = " + projFile.toString());
+			RepositoryTestUtils.deleteContents(projFile);
+		}
+
 		assert (Node.getModelNode().getManagedLibraries().size() == pc.getBuiltInProject().getChildren().size());
+		assert Node.getModelNode().getTLModel().getUserDefinedLibraries().isEmpty();
+		assert mc.getModelNode().getUserLibraries().isEmpty();
+		assert Node.getLibraryModelManager().getUserLibraries().isEmpty();
+
+		assert defaultProject.getLibraries().isEmpty();
+		assert defaultProject.getChildren().isEmpty();
+		assert defaultProject.getTLProject().getProjectItems().isEmpty();
+
+		LOGGER.debug("Project - After Each Test Complete");
 	}
 
 	// TODO - convert to not using builder
 	public LibraryNode createLib(String name, String nsExtension, String prefix, ProjectNode project) {
 		LibraryNode local1 = null;
 		try {
-			local1 = LibraryNodeBuilder
-					.create(name, project.getNamespace() + nsExtension, prefix, new Version(1, 0, 0))
+			local1 = LibraryNodeBuilder.create(name, project.getNamespace() + nsExtension, prefix, new Version(1, 0, 0))
 					.build(project, pc);
 		} catch (LibrarySaveException e) {
 			assertTrue(e.getLocalizedMessage(), 1 == 1);
@@ -141,4 +186,7 @@ public abstract class BaseProjectTest {
 		return file;
 	}
 
+	// FIXME - add these in
+	// public abstract TLModelElement createTL();
+	// public abstract void check();
 }

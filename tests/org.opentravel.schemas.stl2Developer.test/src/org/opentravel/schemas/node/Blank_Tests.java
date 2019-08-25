@@ -24,6 +24,7 @@ import org.junit.Test;
 import org.opentravel.schemas.controllers.DefaultProjectController;
 import org.opentravel.schemas.controllers.MainController;
 import org.opentravel.schemas.node.libraries.LibraryNode;
+import org.opentravel.schemas.stl2developer.OtmRegistry;
 import org.opentravel.schemas.testUtils.LoadFiles;
 import org.opentravel.schemas.testUtils.MockLibrary;
 import org.opentravel.schemas.testUtils.NodeTesters;
@@ -37,7 +38,7 @@ public class Blank_Tests {
 	ModelNode model = null;
 	TestNode tn = new NodeTesters().new TestNode();
 	LoadFiles lf = new LoadFiles();
-	LibraryTests lt = new LibraryTests();
+	Library_FunctionTests lt = new Library_FunctionTests();
 	MockLibrary ml = null;
 	LibraryNode ln = null;
 	MainController mc;
@@ -46,7 +47,7 @@ public class Blank_Tests {
 
 	@Before
 	public void beforeAllTests() {
-		mc = new MainController(); // New one for each test
+		mc = OtmRegistry.getMainController(); // New one for each test
 		ml = new MockLibrary();
 		pc = (DefaultProjectController) mc.getProjectController();
 		defaultProject = pc.getDefaultProject();

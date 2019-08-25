@@ -16,9 +16,11 @@
 package org.opentravel.schemas.node.resources;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 
 import org.eclipse.swt.graphics.Image;
+import org.opentravel.schemacompiler.codegen.impl.QualifiedAction;
 import org.opentravel.schemacompiler.codegen.util.ResourceCodegenUtils;
 import org.opentravel.schemacompiler.model.TLAction;
 import org.opentravel.schemacompiler.model.TLActionRequest;
@@ -46,11 +48,15 @@ public class ActionNode extends ResourceBase<TLAction> implements ResourceMember
 	private String MSGKEY = "rest.ActionNode";
 	private List<InheritedResourceMember> inheritedResponses;
 
+	// // These nodes are never presented in navigator tree so they don't need a children handler.
+	// private List<Node> rChildren = new ArrayList<Node>();
+
 	public class CommonListener implements ResourceFieldListener {
 		@Override
 		public boolean set(String value) {
-			tlObj.setCommonAction(Boolean.valueOf(value));
-			LOGGER.debug("Set common to: " + tlObj.isCommonAction());
+			setCommon(Boolean.valueOf(value));
+			// tlObj.setCommonAction(Boolean.valueOf(value));
+			// LOGGER.debug("Set common to: " + tlObj.isCommonAction());
 			return false;
 		}
 	}
@@ -82,9 +88,24 @@ public class ActionNode extends ResourceBase<TLAction> implements ResourceMember
 		initInherited();
 	}
 
+	public ActionNode(ResourceNode parent, Boolean addRequest) {
+		super(new TLAction(), parent);
+		tlObj.setActionId(""); // prevent NPE in validation
+		parent.getTLModelObject().addAction(tlObj);
+
+		// Create a request resource
+		if (addRequest) {
+			TLActionRequest tlr = new TLActionRequest();
+			tlObj.setRequest(tlr); // must have owner for parent to be set correctly
+			new ActionRequest(tlr);
+		}
+
+		initInherited();
+	}
+
 	public void setRQRS(String label, ActionFacet af, List<TLMimeType> rqMimeTypes, List<TLMimeType> rsMimeTypes,
 			RestStatusCodes code, ActionRequest request, ActionResponse response) {
-		List<Integer> statusCodes = new ArrayList<Integer>(); // http://www.restapitutorial.com/httpstatuscodes.html
+		List<Integer> statusCodes = new ArrayList<>(); // http://www.restapitutorial.com/httpstatuscodes.html
 		statusCodes.add(code.value());
 		setName(label);
 		request.tlObj.setMimeTypes(rqMimeTypes);
@@ -94,6 +115,7 @@ public class ActionNode extends ResourceBase<TLAction> implements ResourceMember
 			response.setPayload(af);
 	}
 
+	@Override
 	public void addChild(ResourceMemberInterface child) {
 		if (!getChildren().contains(child))
 			getChildren().add((Node) child);
@@ -114,7 +136,7 @@ public class ActionNode extends ResourceBase<TLAction> implements ResourceMember
 	public void initInherited() {
 		// Remove old ones and assure there is an array
 		// if (inheritedResponses == null)
-		inheritedResponses = new ArrayList<InheritedResourceMember>();
+		inheritedResponses = new ArrayList<>();
 		if (tlObj == null)
 			return;
 		// Note - tlAR may not have been modeled yet
@@ -133,7 +155,7 @@ public class ActionNode extends ResourceBase<TLAction> implements ResourceMember
 
 	@Override
 	public void delete() {
-		List<Node> kids = new ArrayList<Node>(getChildren()); // avoid co-modification of list
+		List<Node> kids = new ArrayList<>(getChildren()); // avoid co-modification of list
 		for (Node child : kids)
 			child.delete();
 		if (tlObj.getOwner() != null)
@@ -143,7 +165,7 @@ public class ActionNode extends ResourceBase<TLAction> implements ResourceMember
 
 	@Override
 	public List<Node> getNavChildren(boolean deep) {
-		List<Node> kids = new ArrayList<Node>();
+		List<Node> kids = new ArrayList<>();
 		kids.addAll(super.getChildren());
 		if (deep) {
 			if (inheritedResponses == null)
@@ -160,8 +182,33 @@ public class ActionNode extends ResourceBase<TLAction> implements ResourceMember
 	}
 
 	@Override
+	public String getDecoration() {
+		// Get request's action facet
+		String decoration = "  (";
+		if (getRequest() != null) {
+			decoration += getRequest().getHttpMethodAsString() + " : ";
+			if (getRequest().getPayload() == null)
+				decoration += getRequest().getParamGroup() + " Parameters";
+			else
+				decoration += getRequest().getPayload();
+		}
+		if (getResponse() != null) {
+			decoration += " - Returns : ";
+			if (getResponses().size() > 1)
+				decoration += "Multiple responses";
+			else {
+				if (!getResponse().getPayloadName().isEmpty())
+					decoration += getResponse().getPayloadName();
+				else
+					decoration += "Status only";
+			}
+		}
+		return decoration + ")";
+	}
+
+	@Override
 	public List<ResourceField> getFields() {
-		List<ResourceField> fields = new ArrayList<ResourceField>();
+		List<ResourceField> fields = new ArrayList<>();
 		new ResourceField(fields, Boolean.toString(tlObj.isCommonAction()), "rest.ActionNode.fields.common",
 				ResourceFieldType.CheckButton, new CommonListener());
 		return fields;
@@ -182,16 +229,35 @@ public class ActionNode extends ResourceBase<TLAction> implements ResourceMember
 	}
 
 	public ActionRequest getRequest() {
-		// FIXME
-		// ResourceCodegenUtils.getInheritedActions(resource)
-		// ResourceCodegenUtils.getInheritedResponses(action)
-		// ResourceCodegenUtils.getEffectivePath()
-		// ResourceCodegenUtils.getQualifiedActions(resource)
-
 		for (Node n : getChildren())
 			if (n instanceof ActionRequest)
 				return (ActionRequest) n;
 		return null;
+	}
+
+	/**
+	 * Return the first action response found
+	 * 
+	 * @return
+	 */
+	public ActionResponse getResponse() {
+		for (Node n : getChildren())
+			if (n instanceof ActionResponse)
+				return (ActionResponse) n;
+		return null;
+	}
+
+	/**
+	 * Return the first action response found
+	 * 
+	 * @return
+	 */
+	public Collection<ActionResponse> getResponses() {
+		List<ActionResponse> responses = new ArrayList<>();
+		for (Node n : getChildren())
+			if (n instanceof ActionResponse)
+				responses.add((ActionResponse) n);
+		return responses;
 	}
 
 	@Override
@@ -225,6 +291,11 @@ public class ActionNode extends ResourceBase<TLAction> implements ResourceMember
 		tlObj.setActionId(name);
 	}
 
+	public void setCommon(Boolean state) {
+		tlObj.setCommonAction(state);
+		return;
+	}
+
 	public String getQueryTemplate() {
 		if (getRequest() == null)
 			return "";
@@ -238,35 +309,53 @@ public class ActionNode extends ResourceBase<TLAction> implements ResourceMember
 	}
 
 	/**
-	 * Uses ResourceCodegenUtils. If a parent resource reference is present, the resulting path will include the path of
-	 * the parent.
+	 * Uses ResourceCodegenUtils.
+	 * 
+	 * If a parent resource reference is present, the resulting path will include the path of the parent.
 	 * 
 	 * @return URL contribution made by parent ref or empty string
 	 */
 	public String getParentContribution() {
-		String contribution = getOwningComponent().getTLModelObject().getBasePath();
+		// String contribution = getOwningComponent().getTLModelObject().getBasePath();
+		String contribution = "";
 
 		// // Pick any one of these
 		// List<QualifiedAction> qa = ResourceCodegenUtils.getQualifiedActions(getTLModelObject());
 		// if (qa.isEmpty()) return contribution;
 		// String template = qa.get(0).getPathTemplate();
 
-		List<TLResourceParentRef> list = ResourceCodegenUtils.getInheritedParentRefs(getOwningComponent()
-				.getTLModelObject());
-		for (TLResourceParentRef tlRef : list) {
-			// Parent Ref has its own PathTemplate complete with base path and parameters
-			contribution = tlRef.getPathTemplate() + contribution;
-		}
-		// FIXME - codegen is only getting closet ancestor...either fix the codegen utils or walk ancestor vector
-		if (list.size() <= 1 && getOwningComponent().getParentRef() != null) {
-			ResourceNode ancestor = getOwningComponent().getParentRef().getParentResource();
-			if (ancestor != null) {
-				ActionNode action = ancestor.getActions().get(0);
-				contribution = action.getParentContribution() + contribution;
-			}
+		// From hotfix: https://github.com/OpenTravel/OTM-DE/commit/a9be4859740aaeb9e5607485d844bf67786b4816
+		// Since numerous combinations of parent reference paths are possible, pick
+		// the last entry in the list of qualified actions. It is the most likely to
+		// have an "interesting" path that contains parent references.
+		List<QualifiedAction> qa = ResourceCodegenUtils.getQualifiedActions(getTLModelObject());
+		if (qa.isEmpty())
+			return contribution;
+		List<TLResourceParentRef> parentRefs = qa.get(qa.size() - 1).getParentRefs();
+		for (TLResourceParentRef tlRef : parentRefs) {
+			if (tlRef.getPathTemplate() != null)
+				contribution = tlRef.getPathTemplate() + contribution;
 		}
 
-		LOGGER.debug("Parent contribution to " + getOwningComponent() + ": " + contribution);
+		// This seems to duplicate the parent ref
+		// List<TLResourceParentRef> list = ResourceCodegenUtils.getInheritedParentRefs(getOwningComponent()
+		// .getTLModelObject());
+		// for (TLResourceParentRef tlRef : list) {
+		// // Parent Ref has its own PathTemplate complete with base path and parameters
+		// if (tlRef.getPathTemplate() != null)
+		// contribution = tlRef.getPathTemplate() + contribution;
+		// }
+		// 2/6/2018 - hotfix above does NOT remove need to recurse through parents
+		// FIXME - codegen is only getting closet ancestor...either fix the codegen utils or walk ancestor vector
+		// if (list.size() <= 1 && getOwningComponent().getParentRef() != null) {
+		// ResourceNode ancestor = getOwningComponent().getParentRef().getParentResource();
+		// if (ancestor != null) {
+		// ActionNode action = ancestor.getActions().get(0);
+		// contribution = action.getParentContribution() + contribution;
+		// }
+		// }
+
+		// LOGGER.debug("Parent contribution to " + getOwningComponent() + ": " + contribution);
 		return contribution;
 	}
 }

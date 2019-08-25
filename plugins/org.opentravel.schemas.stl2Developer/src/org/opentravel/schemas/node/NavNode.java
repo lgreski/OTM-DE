@@ -19,9 +19,13 @@ import java.util.ArrayList;
 import java.util.List;
 
 import org.eclipse.swt.graphics.Image;
+import org.opentravel.schemacompiler.model.AbstractLibrary;
+import org.opentravel.schemas.node.handlers.children.NavNodeChildrenHandler;
+import org.opentravel.schemas.node.interfaces.FacadeInterface;
 import org.opentravel.schemas.node.interfaces.LibraryMemberInterface;
 import org.opentravel.schemas.node.libraries.LibraryNode;
 import org.opentravel.schemas.properties.Images;
+import org.opentravel.schemas.types.TypeProviderAndOwners;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -29,40 +33,47 @@ import org.slf4j.LoggerFactory;
  * Navigation Nodes describe GUI model objects that are not part of the TL Model. They ease navigating the GUI and
  * <b>not</b> representing the OTM model.
  * <p>
- * NavNodes only contain objects (LibraryMembers). If the object is in a version chain, then all of the objects in that
+ * NavNodes only contain LibraryMembers objects. If the object is in a version chain, then all of the objects in that
  * chain will have a link to a single NavNode which is a child of the corresponding AggregateNode in the chain.
  * 
  * @author Dave Hollander
  * 
  */
-public class NavNode extends Node {
+public class NavNode extends Node implements FacadeInterface, TypeProviderAndOwners {
 	@SuppressWarnings("unused")
 	private static final Logger LOGGER = LoggerFactory.getLogger(NavNode.class);
 
 	private String name = "";
 
 	/**
-	 * Create a navigation node, get ns and prefix from parentNode node. link to parentNode node.
+	 * Create a navigation node.
 	 * 
 	 * @param name
 	 * @param parent
+	 *            owning library
 	 */
 	public NavNode(final String name, final Node parent) {
 		super();
-		assert (parent != null) : "Parent is null.";
 		setName(name);
-		setLibrary(parent.getLibrary());
-		// Don't break version node-component node bond.
-		// if (parent instanceof VersionNode)
-		// parent.getParent().linkChild(this);
-		// else
-		parent.linkChild(this); // link without doing family tests.
+		childrenHandler = new NavNodeChildrenHandler(this);
+		this.parent = parent;
+	}
+
+	// TODO - make the handler C be LibraryMemberInterface
+	public void add(LibraryMemberInterface lm) {
+		// if (childrenHandler instanceof NavNodeChildrenHandler)
+		getChildrenHandler().add((Node) lm);
+	}
+
+	// FIXME - rename after remove fixed in Node
+	public void removeLM(LibraryMemberInterface lm) {
+		if (childrenHandler instanceof NavNodeChildrenHandler)
+			getChildrenHandler().remove((Node) lm);
 	}
 
 	@Override
-	public void linkLibrary(LibraryNode lib) {
-		if (lib != null && !getChildren().contains(lib))
-			getChildren().add(lib);
+	public NavNodeChildrenHandler getChildrenHandler() {
+		return (NavNodeChildrenHandler) childrenHandler;
 	}
 
 	@Override
@@ -77,9 +88,12 @@ public class NavNode extends Node {
 		return Images.getImageRegistry().get(Images.Folder);
 	}
 
+	/**
+	 * @return parent's library
+	 */
 	@Override
-	public boolean isLibraryContainer() {
-		return false;
+	public LibraryNode getLibrary() {
+		return parent != null ? parent.getLibrary() : null;
 	}
 
 	public boolean isComplexRoot() {
@@ -130,7 +144,7 @@ public class NavNode extends Node {
 	 * @return
 	 */
 	public List<LibraryMemberInterface> get_LibraryMembers() {
-		List<LibraryMemberInterface> members = new ArrayList<LibraryMemberInterface>();
+		List<LibraryMemberInterface> members = new ArrayList<>();
 		for (Node n : getChildren()) {
 			// if (n instanceof VersionNode && ((VersionNode) n).get() != null)
 			// n = ((VersionNode) n).get();
@@ -138,11 +152,6 @@ public class NavNode extends Node {
 				members.add((LibraryMemberInterface) n);
 		}
 		return members;
-	}
-
-	@Override
-	public boolean hasChildren_TypeProviders() {
-		return getChildren().size() > 0;
 	}
 
 	@Override
@@ -175,10 +184,34 @@ public class NavNode extends Node {
 	/**
 	 * @return true if this member is a child or if it has a version node that is a child.
 	 */
+	@Override
 	public boolean contains(Node member) {
-		// Node thisNode = member;
-		// if (member.getVersionNode() != null)
-		// thisNode = member.getVersionNode();
-		return getChildren().contains(member);
+		return getChildrenHandler().contains(member);
+	}
+
+	/**
+	 * Provides a facade for portions of the library.
+	 */
+	@Override
+	public LibraryNode get() {
+		return getLibrary();
+	}
+
+	/**
+	 * @return service node if it exists as a child of this node or else null
+	 */
+	public ServiceNode getService() {
+		for (Node n : getChildrenHandler().get())
+			if (n instanceof ServiceNode)
+				return (ServiceNode) n;
+		return null;
+	}
+
+	/**
+	 * Provides a facade for portions of the library.
+	 */
+	@Override
+	public AbstractLibrary getTLModelObject() {
+		return get() != null ? get().getTLModelObject() : null;
 	}
 }

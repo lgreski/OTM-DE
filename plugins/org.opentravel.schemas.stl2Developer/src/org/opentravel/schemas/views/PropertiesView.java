@@ -37,21 +37,24 @@ import org.eclipse.ui.forms.widgets.ScrolledForm;
 import org.eclipse.ui.forms.widgets.TableWrapLayout;
 import org.opentravel.schemas.controllers.OtmActions;
 import org.opentravel.schemas.node.ComponentNode;
-import org.opentravel.schemas.node.ConstraintHandler;
 import org.opentravel.schemas.node.Node;
-import org.opentravel.schemas.node.SimpleComponentNode;
-import org.opentravel.schemas.node.SimpleTypeNode;
-import org.opentravel.schemas.node.VWA_Node;
 import org.opentravel.schemas.node.XsdNode;
-import org.opentravel.schemas.node.facets.FacetNode;
-import org.opentravel.schemas.node.facets.ListFacetNode;
+import org.opentravel.schemas.node.handlers.ConstraintHandler;
 import org.opentravel.schemas.node.interfaces.INode;
+import org.opentravel.schemas.node.objectMembers.FacetOMNode;
 import org.opentravel.schemas.node.properties.ElementNode;
 import org.opentravel.schemas.node.properties.EnumLiteralNode;
+import org.opentravel.schemas.node.properties.IValueWithContextHandler;
+import org.opentravel.schemas.node.properties.IndicatorNode;
 import org.opentravel.schemas.node.properties.PropertyNode;
 import org.opentravel.schemas.node.properties.PropertyNodeType;
 import org.opentravel.schemas.node.properties.RoleNode;
-import org.opentravel.schemas.node.properties.SimpleAttributeNode;
+import org.opentravel.schemas.node.properties.SimpleAttributeFacadeNode;
+import org.opentravel.schemas.node.typeProviders.AbstractContextualFacet;
+import org.opentravel.schemas.node.typeProviders.EnumerationClosedNode;
+import org.opentravel.schemas.node.typeProviders.ListFacetNode;
+import org.opentravel.schemas.node.typeProviders.SimpleTypeNode;
+import org.opentravel.schemas.node.typeProviders.VWA_Node;
 import org.opentravel.schemas.properties.Messages;
 import org.opentravel.schemas.stl2developer.MainWindow;
 import org.opentravel.schemas.stl2developer.OtmRegistry;
@@ -324,7 +327,7 @@ public class PropertiesView extends OtmAbstractView implements ISelectionListene
 	 * @return
 	 */
 	private String[] getSupportedRoleTypes(Node node) {
-		List<String> props = new ArrayList<String>();
+		List<String> props = new ArrayList<>();
 		if (node instanceof PropertyNode) {
 			Collection<PropertyNodeType> types = PropertyNodeType.getSupportedTypes((PropertyNode) node);
 			for (PropertyNodeType t : types)
@@ -349,7 +352,7 @@ public class PropertiesView extends OtmAbstractView implements ISelectionListene
 	@Override
 	public List<Node> getSelectedNodes() {
 		ArrayList<Node> sn;
-		sn = new ArrayList<Node>();
+		sn = new ArrayList<>();
 		sn.add(propertyNode);
 		return sn;
 	}
@@ -362,17 +365,17 @@ public class PropertiesView extends OtmAbstractView implements ISelectionListene
 	/**
 	 * Update the mandatory button checked/unchecked setting and enabled.
 	 */
-	private void postMandatoryButton(final ComponentNode cn) {
-		boolean enabled = cn.isEditable_newToChain();
+	private void postMandatoryButton(final PropertyNode pn) {
+		boolean enabled = pn.isEditable_newToChain();
 		// Force optional if the property is in a minor and the owning component is a versioned object
-		if (cn.getOwningComponent().isVersioned() && cn.getLibrary().isMinorVersion()) {
+		if (pn.getOwningComponent().isVersioned() && pn.getLibrary().isMinorVersion()) {
 			enabled = false;
-			cn.setMandatory(false);
+			pn.setMandatory(false);
 		}
-		mandatoryButton.setSelection(cn.isMandatory());
+		mandatoryButton.setSelection(pn.isMandatory());
 		mandatoryButton.setEnabled(enabled);
 		if (enabled)
-			if (cn.isMandatory())
+			if (pn.isMandatory())
 				mandatoryButton.setToolTipText("Uncheck to make this property optional.");
 			else
 				mandatoryButton.setToolTipText("Check to make this property required.");
@@ -395,7 +398,8 @@ public class PropertiesView extends OtmAbstractView implements ISelectionListene
 	 *            - Node to post
 	 */
 	private void postProperties(final Node n) {
-		if (!mainWindow.hasDisplay())
+		// All widgets are contained in the property composite. It is the only test needed to assure the view is active.
+		if (!mainWindow.hasDisplay() || propertyComposite == null || propertyComposite.isDisposed())
 			return;
 
 		if (n == null || n.getParent() == null) {
@@ -406,8 +410,10 @@ public class PropertiesView extends OtmAbstractView implements ISelectionListene
 
 		OtmHandlers.suspendHandlers();
 		clearProperties(); // Clear the fields, and the propertyNode pointer
-
-		fields.postField(nameField, n.getName(), n.isRenameable());
+		if (n instanceof AbstractContextualFacet)
+			mc.getFields().postField(nameField, ((AbstractContextualFacet) n).getLocalName(), n.isRenameable());
+		else
+			fields.postField(nameField, n.getName(), n.isRenameable());
 		fields.postField(componentField, n.getComponentType(), false);
 		fields.postField(descField, n.getDescription(), n.isEditable_description());
 		fields.postField(nameSpaceField, n.getNamespace(), false);
@@ -430,17 +436,17 @@ public class PropertiesView extends OtmAbstractView implements ISelectionListene
 		}
 		// LOGGER.debug("Posting component node properties.");
 
-		if (n.getParent() == null || n.getModelObject() == null || n.getTLModelObject() == null) {
+		if (n.getParent() == null || n.getTLModelObject() == null) {
 			LOGGER.warn("Error with object: " + n.getNameWithPrefix());
-		} else if (n.getParent() instanceof VWA_Node && n instanceof FacetNode) {
+		} else if (n.getParent() instanceof VWA_Node && n instanceof FacetOMNode) {
 			// for VWA - Facets should not have name and description editable
 			// fields.postField(nameField, n.getName(), false);
 			fields.postField(descField, n.getDescription(), false);
 			typeField.setEnabled(false);
-		} else if (cn instanceof SimpleComponentNode) {
+		} else if (cn instanceof SimpleTypeNode) {
 			updateType(cn);
 			updateConstraints(cn);
-		} else if (cn instanceof SimpleAttributeNode) {
+		} else if (cn instanceof SimpleAttributeFacadeNode) {
 			updateType(cn);
 		} else if (n instanceof EnumLiteralNode || n instanceof RoleNode) {
 			// Nothing to do.
@@ -450,8 +456,7 @@ public class PropertiesView extends OtmAbstractView implements ISelectionListene
 			updateConstraints((ComponentNode) cn.getType(), false);
 			updatePropertyTypeCombo((PropertyNode) cn);
 			if (cn instanceof ElementNode) {
-				if (cn.getType() != null && cn.getType() instanceof ListFacetNode
-						&& ((ListFacetNode) cn.getType()).isDetailListFacet()) {
+				if (cn.getType() instanceof ListFacetNode && ((ListFacetNode) cn.getType()).isDetailListFacet()) {
 					repeatNonValid.setVisible(true);
 					repeatNonValid.setText("---");
 					repeatSpinner.setVisible(false);
@@ -461,8 +466,8 @@ public class PropertiesView extends OtmAbstractView implements ISelectionListene
 					widgets.postSpinner(repeatSpinner, ((ElementNode) cn).getRepeat(), cn.isEditable());
 				}
 			}
-			if (!((PropertyNode) cn).isIndicator())
-				postMandatoryButton(cn);
+			if (!(cn instanceof IndicatorNode))
+				postMandatoryButton((PropertyNode) cn);
 			// in this case fixNames should set type
 			if (((PropertyNode) cn).isAssignedComplexType())
 				nameField.setEnabled(false);
@@ -505,7 +510,7 @@ public class PropertiesView extends OtmAbstractView implements ISelectionListene
 		if (((TypeUser) cn).getRequiredType() != null)
 			return;
 
-		fields.postField(typeField, cn.getTypeName(), cn.isEnabled_AssignType());
+		fields.postField(typeField, cn.getAssignedTypeName(), cn.isEnabled_AssignType());
 		// fields.postField(typeField, cn.getTypeName(), cn.isEditable_newToChain() && cn.isTypeUser());
 		fields.postField(typePrefix, cn.getAssignedPrefix(), false);
 		// See logic in LibraryTablePosterWithButtons
@@ -525,14 +530,18 @@ public class PropertiesView extends OtmAbstractView implements ISelectionListene
 		updateConstraints(cn, cn.isEditable_newToChain());
 	}
 
+	// Cn is the type assigned to property being posted in this view
 	private void updateConstraints(final ComponentNode cn, boolean editable) {
 		if (cn == null)
 			return;
-		if (cn instanceof SimpleComponentNode)
-			listButton.setEnabled(true);
-		if (cn instanceof SimpleTypeNode)
+		if (cn instanceof SimpleTypeNode) {
+			// Simple objects with parent of closed enumeration MUST have list checked
+			if (!(((SimpleTypeNode) cn).getAssignedType() instanceof EnumerationClosedNode))
+				listButton.setEnabled(true);
 			listButton.setSelection(((SimpleTypeNode) cn).isSimpleList());
+		}
 
+		// simpleTypeNode
 		ConstraintHandler ch = cn.getConstraintHandler();
 		if (ch != null) {
 			fields.postField(patternField, ch.getPattern(), editable);
@@ -550,14 +559,18 @@ public class PropertiesView extends OtmAbstractView implements ISelectionListene
 	private void updateEquivalent(ComponentNode cn, String context) {
 		final String eqToolTip = Messages.getString("OtmW." + "317"); //$NON-NLS-1$
 		equivalentField.setToolTipText(eqToolTip + " (" + context + ")"); // show context
-		fields.postField(equivalentField, cn.getEquivalent(context), cn.isEditable_equivalent());
+		IValueWithContextHandler handler = cn.getEquivalentHandler();
+		if (handler != null)
+			fields.postField(equivalentField, handler.get(context), cn.isEditable_equivalent());
 	}
 
 	private void updateExample(ComponentNode cn, String context) {
 		// boolean isExampleSupported = NodeUtils.checker(cn).isExampleSupported().get();
 		final String toolTip = Messages.getString("OtmW." + "315"); //$NON-NLS-1$
 		exampleField.setToolTipText(toolTip + " (" + context + ")"); // show context
-		fields.postField(exampleField, cn.getExample(context), cn.isEditable_example());
+		IValueWithContextHandler handler = cn.getExampleHandler();
+		if (handler != null)
+			fields.postField(exampleField, handler.get(context), cn.isEditable_example());
 	}
 
 	/**

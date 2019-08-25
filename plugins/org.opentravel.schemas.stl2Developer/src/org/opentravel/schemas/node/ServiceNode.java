@@ -15,61 +15,38 @@
  */
 package org.opentravel.schemas.node;
 
+import java.util.List;
+
 import org.eclipse.swt.graphics.Image;
-import org.opentravel.schemacompiler.model.TLLibrary;
+import org.opentravel.schemacompiler.model.LibraryElement;
 import org.opentravel.schemacompiler.model.TLService;
-import org.opentravel.schemas.modelObject.ServiceMO;
-import org.opentravel.schemas.node.facets.OperationNode;
-import org.opentravel.schemas.node.facets.OperationNode.ResourceOperationTypes;
+import org.opentravel.schemas.node.handlers.children.ServiceChildrenHandler;
 import org.opentravel.schemas.node.interfaces.INode;
+import org.opentravel.schemas.node.interfaces.LibraryMemberInterface;
 import org.opentravel.schemas.node.libraries.LibraryNode;
+import org.opentravel.schemas.node.objectMembers.OperationNode;
+import org.opentravel.schemas.node.objectMembers.OperationNode.ServiceOperationTypes;
+import org.opentravel.schemas.node.typeProviders.AliasNode;
+import org.opentravel.schemas.node.typeProviders.facetOwners.BusinessObjectNode;
 import org.opentravel.schemas.properties.Images;
+import org.opentravel.schemas.trees.type.BusinessObjectOnlyTypeFilter;
+import org.opentravel.schemas.trees.type.TypeSelectionFilter;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * @author Dave Hollander
  * 
  */
-public class ServiceNode extends ComponentNode {
-	// private final static Logger LOGGER = LoggerFactory.getLogger(ServiceNode.class);
+public class ServiceNode extends ComponentNode implements LibraryMemberInterface {
+	private final static Logger LOGGER = LoggerFactory.getLogger(ServiceNode.class);
 
-	public ServiceNode(final TLService tlSvc, LibraryNode ln) {
-		super(tlSvc);
+	protected LibraryNode owningLibrary = null;
 
-		// If the service has not had nodes created (ie. first time being loaded) then create children
-		if (tlSvc.getOperations().size() != getChildren().size())
-			addMOChildren();
-		// following won't work because listener assigned in super
-		// if (GetNode(tlSvc) == null)
-		// addMOChildren();
-
-		link(tlSvc, ln);
-
-		assert (modelObject instanceof ServiceMO);
-
-	}
-
-	public void link(final TLService tlSvc, LibraryNode ln) {
-		if (ln == null)
-			throw new IllegalArgumentException("Null library for the service.");
-
-		// Make sure the library only has one service.
-		final TLLibrary tlLib = (TLLibrary) ln.getTLaLib();
-		if (ln.getServiceRoot() != null) {
-			ln.getServiceRoot().delete();
-		}
-		if (tlLib.getService() != tlSvc) {
-			tlLib.setService(tlSvc);
-		}
-
-		if (tlSvc.getName() == null || tlSvc.getName().isEmpty())
-			setName(ln.getName() + "_Service");
-		ln.getChildren().add(this);
-		setParent(ln);
-		setLibrary(ln);
-		ln.setServiceRoot(this);
-
-		if (!(tlSvc instanceof TLService))
-			throw new IllegalArgumentException("Invalid object to create service from.");
+	public ServiceNode(final BusinessObjectNode n) {
+		this(n.getLibrary());
+		addCRUDQ_Operations(n);
+		setName(n.getName());
 	}
 
 	/**
@@ -77,25 +54,44 @@ public class ServiceNode extends ComponentNode {
 	 * the service is linked into the library.
 	 * 
 	 * @param n
-	 *            node to get the library from. If it is a business object, CRUD operations will be create with it as
-	 *            the subject.
+	 *            node to get the library from. Can be the library. If it is a business object, CRUD operations will be
+	 *            create with it as the subject.
 	 */
-	public ServiceNode(final Node n) {
-		this(new TLService(), n.getLibrary());
-		setDescription(n.getDescription());
-		setName(n.getName());
-		addCRUDQ_Operations(n);
-		// If a chain, the wrap the service in a version and add to chain aggregate.
-		if (n.getLibrary().isInChain())
-			n.getLibrary().getChain().add(this);
+	public ServiceNode(final LibraryNode ln) {
+		this(new TLService(), ln);
+		setDescription(ln.getDescription());
 
-		assert (modelObject instanceof ServiceMO);
 		assert (getTLModelObject() instanceof TLService);
 	}
 
-	@Override
-	public void setName(final String name) {
-		getTLModelObject().setName(NodeNameUtils.fixServiceName(name));
+	/**
+	 * Service created from TL Service already in a library.
+	 * 
+	 * @param tlSvc
+	 * @param ln
+	 */
+	public ServiceNode(final TLService tlSvc) {
+		super(tlSvc);
+
+		childrenHandler = new ServiceChildrenHandler(this);
+	}
+
+	/**
+	 * Service constructor used in tests created from TL Service already in a library.
+	 * 
+	 * @param tlSvc
+	 * @param ln
+	 */
+	public ServiceNode(final TLService tlSvc, LibraryNode ln) {
+		this(tlSvc);
+
+		owningLibrary = ln;
+		if (ln != null)
+			ln.addServiceNode(this);
+	}
+
+	public void add(OperationNode op) {
+		getChildrenHandler().add(op);
 	}
 
 	/**
@@ -108,16 +104,56 @@ public class ServiceNode extends ComponentNode {
 		if (!(subject instanceof BusinessObjectNode))
 			return;
 		BusinessObjectNode bo = (BusinessObjectNode) subject;
-		for (ResourceOperationTypes op : ResourceOperationTypes.values())
-			if (!op.equals(ResourceOperationTypes.QUERY))
+		for (ServiceOperationTypes op : ServiceOperationTypes.values())
+			if (!op.equals(ServiceOperationTypes.QUERY))
 				new OperationNode(this, op.displayName, op, bo);
 		for (Node n : bo.getQueryFacets())
-			new OperationNode(this, n.getLabel(), ResourceOperationTypes.QUERY, bo);
+			new OperationNode(this, n.getLabel(), ServiceOperationTypes.QUERY, bo);
+	}
+
+	@Override
+	public LibraryMemberInterface clone(LibraryNode targetLib, String nameSuffix) {
+		return null; // NO-OP
+	}
+
+	// @Override
+	// public Node clone(Node parent, String nameSuffix) {
+	// return null; // NO-OP
+	// }
+
+	@Override
+	public LibraryElement cloneTLObj() {
+		return null;
+	}
+
+	/**
+	 * Delete Service. There can only be one service in a library. The service parent is the library where declared. It
+	 * may also be in the service aggregate for the chain. Services are not wrapped in a version node.
+	 */
+	@Override
+	public void delete() {
+		// LOGGER.debug("Deleting Service node.");
+		if (getLibrary().isInChain())
+			getLibrary().getChain().removeFromAggregate(this);
+		getLibrary().getServiceRoot().removeLM(this);
+		deleteTL();
+		deleted = true;
+	}
+
+	@Override
+	public void deleteTL() {
+		if (getTLModelObject().getOwningLibrary() != null)
+			getTLModelObject().getOwningLibrary().removeNamedMember(getTLModelObject());
 	}
 
 	@Override
 	public INode.CommandType getAddCommand() {
 		return INode.CommandType.OPERATION;
+	}
+
+	@Override
+	public ServiceChildrenHandler getChildrenHandler() {
+		return (ServiceChildrenHandler) childrenHandler;
 	}
 
 	@Override
@@ -132,8 +168,12 @@ public class ServiceNode extends ComponentNode {
 
 	@Override
 	public String getLabel() {
-		return getName() + " (Version:  " + getLibrary().getVersion() + ")";
-		// return "Service: " + getName();
+		return getLibrary() != null ? getName() + " (Version:  " + getLibrary().getVersion() + ")" : "";
+	}
+
+	@Override
+	public LibraryNode getLibrary() {
+		return owningLibrary;
 	}
 
 	@Override
@@ -143,7 +183,18 @@ public class ServiceNode extends ComponentNode {
 
 	@Override
 	public TLService getTLModelObject() {
-		return (TLService) (modelObject != null ? modelObject.getTLModelObj() : null);
+		return (TLService) tlObj;
+	}
+
+	@Override
+	public TypeSelectionFilter getTypeSelectionFilter() {
+		return new BusinessObjectOnlyTypeFilter(null);
+	}
+
+	@Override
+	public boolean hasChildren_TypeProviders() {
+		// enable if we want to have messages assignable as types.
+		return false;
 	}
 
 	@Override
@@ -156,22 +207,6 @@ public class ServiceNode extends ComponentNode {
 	}
 
 	@Override
-	public boolean isNavChild(boolean deep) {
-		return true;
-	}
-
-	@Override
-	public boolean isNamedEntity() {
-		return false;
-	}
-
-	@Override
-	public boolean hasChildren_TypeProviders() {
-		// enable if we want to have messages assignable as types.
-		return false;
-	}
-
-	@Override
 	public boolean isEnabled_AddProperties() {
 		if (getLibrary() == null || parent == null || !isEditable() || isDeleted())
 			return false;
@@ -180,5 +215,42 @@ public class ServiceNode extends ComponentNode {
 		if (!getLibrary().isInChain())
 			return true;
 		return !getLibrary().getChain().getHead().getEditStatus().equals(NodeEditStatus.PATCH);
+	}
+
+	@Override
+	public boolean isNamedEntity() {
+		return false;
+	}
+
+	@Override
+	public boolean isNavChild(boolean deep) {
+		return true;
+	}
+
+	public void remove(OperationNode op) {
+		getChildrenHandler().remove(op);
+	}
+
+	/**
+	 * Simple Setter of owning library
+	 */
+	@Override
+	public void setLibrary(LibraryNode lib) {
+		owningLibrary = lib;
+	}
+
+	@Override
+	public void setName(final String name) {
+		getTLModelObject().setName(NodeNameUtils.fixServiceName(name));
+	}
+
+	@Override
+	public LibraryMemberInterface copy(LibraryNode destLib) throws IllegalArgumentException {
+		return null;
+	}
+
+	@Override
+	public List<AliasNode> getAliases() {
+		return null;
 	}
 }

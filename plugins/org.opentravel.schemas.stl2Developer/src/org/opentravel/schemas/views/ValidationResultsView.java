@@ -37,6 +37,7 @@ import org.eclipse.swt.events.SelectionListener;
 import org.eclipse.swt.graphics.Image;
 import org.eclipse.swt.layout.GridData;
 import org.eclipse.swt.widgets.Composite;
+import org.eclipse.swt.widgets.Display;
 import org.eclipse.swt.widgets.Table;
 import org.eclipse.swt.widgets.TableColumn;
 import org.opentravel.schemacompiler.model.TLDocumentation;
@@ -59,6 +60,7 @@ import org.opentravel.schemas.node.NodeFinders;
 import org.opentravel.schemas.node.ProjectNode;
 import org.opentravel.schemas.node.VersionNode;
 import org.opentravel.schemas.node.interfaces.INode;
+import org.opentravel.schemas.node.interfaces.LibraryMemberInterface;
 import org.opentravel.schemas.node.libraries.LibraryChainNode;
 import org.opentravel.schemas.node.libraries.LibraryNode;
 import org.opentravel.schemas.node.properties.PropertyNode;
@@ -94,8 +96,8 @@ public class ValidationResultsView extends OtmAbstractView {
 		otmActions = new OtmActions(OtmRegistry.getMainController());
 
 		// 3 column table for object, level/type and message
-		Table findingsTable = new Table(parent, SWT.MULTI | SWT.BORDER | SWT.FULL_SELECTION | SWT.V_SCROLL
-				| SWT.H_SCROLL);
+		Table findingsTable = new Table(parent,
+				SWT.MULTI | SWT.BORDER | SWT.FULL_SELECTION | SWT.V_SCROLL | SWT.H_SCROLL);
 		findingsTable.setLinesVisible(false);
 		findingsTable.setHeaderVisible(true);
 		final GridData td = new GridData(SWT.FILL, SWT.FILL, true, false);
@@ -143,8 +145,15 @@ public class ValidationResultsView extends OtmAbstractView {
 		// LOGGER.info("Done initializing part control of " + this.getClass());
 	}
 
+	private boolean viewerIsOk() {
+		if (Display.getCurrent() == null)
+			return false;
+		return findingsViewer != null && findingsViewer.getControl() != null
+				&& !findingsViewer.getControl().isDisposed();
+	}
+
 	private void packTable() {
-		if (findingsViewer != null)
+		if (viewerIsOk())
 			for (final TableColumn tc : findingsViewer.getTable().getColumns()) {
 				tc.pack();
 			}
@@ -155,7 +164,7 @@ public class ValidationResultsView extends OtmAbstractView {
 	 */
 	public void postFindings() {
 		// LOGGER.debug("Posting findings.");
-		if (findingsViewer == null)
+		if (!viewerIsOk())
 			return;
 
 		clearFindings();
@@ -164,15 +173,30 @@ public class ValidationResultsView extends OtmAbstractView {
 				findingsContent = findings.getAllFindingsAsList();
 				findingsViewer.setInput(findingsContent);
 				packTable();
+				findingsViewer.refresh();
+				mc.postStatus(findingsContent.size() + " Warnings or Errors found.");
 			} else {
 				mc.postStatus("No Warnings or Errors found.");
 			}
 	}
 
 	public void clearFindings() {
-		if (findingsViewer != null)
+		// Run in UI thread if not in the UI thread.
+		if (Display.getCurrent() == null) {
+			Display.getDefault().asyncExec(new Runnable() {
+				@Override
+				public void run() {
+					if (viewerIsOk()) {
+						findingsViewer.setInput(null);
+						findingsViewer.refresh();
+						packTable();
+					}
+				}
+			});
+		} else if (viewerIsOk()) {
 			findingsViewer.setInput(null);
-		packTable();
+			packTable();
+		}
 	}
 
 	public ValidationFindings getFindings() {
@@ -286,7 +310,7 @@ public class ValidationResultsView extends OtmAbstractView {
 		// Node n = new
 		// ComponentNode().findNodeFromRoot(finding.getSource().getValidationIdentity());
 		Node n = NodeFinders.findNodeByValidationIentity(finding.getSource().getValidationIdentity());
-		ArrayList<Node> matches = new ArrayList<Node>();
+		ArrayList<Node> matches = new ArrayList<>();
 		matches.add(n);
 
 		// Look through findings to find match on both error id and param
@@ -309,7 +333,7 @@ public class ValidationResultsView extends OtmAbstractView {
 		}
 		// for (INode m : matches) {
 		// // if (m != null)
-		// //// LOGGER.debug("  Match returned: " + m.getName());
+		// //// LOGGER.debug(" Match returned: " + m.getName());
 		// }
 		return matches;
 	}
@@ -317,6 +341,8 @@ public class ValidationResultsView extends OtmAbstractView {
 	/** Copies the content of the current findings to the clipboard. */
 	@SuppressWarnings("unchecked")
 	public void copyFindingsToClipboard() {
+		if (!viewerIsOk())
+			return;
 		IStructuredSelection selection = (IStructuredSelection) findingsViewer.getSelection();
 		Iterator<ValidationFinding> iterator;
 		StringBuilder textResults = new StringBuilder();
@@ -351,9 +377,11 @@ public class ValidationResultsView extends OtmAbstractView {
 			sortAscending = !sortAscending;
 		}
 
-		Collections.sort(findingsContent,
-				new FindingComparator((ITableLabelProvider) findingsViewer.getLabelProvider()));
-		findingsViewer.refresh();
+		if (viewerIsOk()) {
+			Collections.sort(findingsContent,
+					new FindingComparator((ITableLabelProvider) findingsViewer.getLabelProvider()));
+			findingsViewer.refresh();
+		}
 	}
 
 	/** Returns the appropriate label for each column of a table-row entry. */
@@ -452,14 +480,14 @@ public class ValidationResultsView extends OtmAbstractView {
 		if (node instanceof ModelNode)
 			findings = validate(Node.getModelNode());
 		else if (node instanceof LibraryChainNode) {
-			for (LibraryNode ln : node.getLibraries()) {
+			for (LibraryNode ln : ((LibraryChainNode) node).getLibraries()) {
 				if (findings == null)
 					findings = validate(ln);
 				else
 					findings.addAll(validate(ln));
 			}
 		} else if (node instanceof ProjectNode) {
-			for (LibraryNode ln : node.getLibraries()) {
+			for (LibraryNode ln : ((ProjectNode) node).getLibraries()) {
 				if (findings == null)
 					findings = validate(ln);
 				else
@@ -468,7 +496,7 @@ public class ValidationResultsView extends OtmAbstractView {
 		} else if (node.isTLLibrary())
 			findings = validate(node);
 		else if (node.isNavigation()) {
-			for (Node n : node.getDescendants_LibraryMembers()) {
+			for (LibraryMemberInterface n : node.getDescendants_LibraryMembers()) {
 				if (findings == null)
 					findings = validate(n);
 				else
@@ -501,6 +529,15 @@ public class ValidationResultsView extends OtmAbstractView {
 	// }
 	// };
 	// job.schedule();
+
+	/**
+	 * @param n
+	 * @return
+	 */
+	private ValidationFindings validate(LibraryMemberInterface n) {
+		// TODO Auto-generated method stub
+		return null;
+	}
 
 	// ProgressMonitorDialog dialog = new ProgressMonitorDialog(shell);
 	// dialog.run(true, true, new IRunnableWithProgress(){
@@ -547,6 +584,8 @@ public class ValidationResultsView extends OtmAbstractView {
 
 	@Override
 	public void refresh(INode node) {
+		currentNode = node;
+		validateNode((Node) currentNode);
 		postFindings(); // TODO - go to finding related to this node
 
 	}

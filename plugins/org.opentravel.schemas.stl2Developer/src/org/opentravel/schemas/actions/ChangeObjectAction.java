@@ -15,10 +15,11 @@
  */
 package org.opentravel.schemas.actions;
 
-import org.opentravel.schemas.node.ChoiceObjectNode;
 import org.opentravel.schemas.node.ComponentNode;
 import org.opentravel.schemas.node.Node;
 import org.opentravel.schemas.node.interfaces.Enumeration;
+import org.opentravel.schemas.node.interfaces.LibraryMemberInterface;
+import org.opentravel.schemas.node.typeProviders.ChoiceObjectNode;
 import org.opentravel.schemas.properties.StringProperties;
 import org.opentravel.schemas.stl2developer.MainWindow;
 
@@ -30,13 +31,26 @@ import org.opentravel.schemas.stl2developer.MainWindow;
  */
 public class ChangeObjectAction extends OtmAbstractAction {
 
+	private ChangeActionController controller;
+
 	public ChangeObjectAction(final MainWindow mainWindow, final StringProperties props) {
 		super(mainWindow, props);
+		controller = new ChangeActionController();
 	}
 
 	@Override
 	public void run() {
-		getMainController().changeSelection();
+		// getMainController().changeSelection();
+		Node selected = mc.getSelectedNode_TypeView();
+		if (selected != null) {
+			// final ComponentNode n = (ComponentNode) selected.getOwningComponent();
+			// if (n != null) {
+			selected = controller.runWizard(selected.getOwningComponent());
+			// mc.changeNode(n);
+			// }
+		}
+		mc.refresh();
+		mc.setCurrentNode_TypeView(selected);
 	}
 
 	@Override
@@ -50,7 +64,7 @@ public class ChangeObjectAction extends OtmAbstractAction {
 		if (currentNode.isEditable_inService())
 			return false;
 
-		Node owner = currentNode.getOwningComponent();
+		LibraryMemberInterface owner = currentNode.getOwningComponent();
 		if (owner == null)
 			return false;
 		if (owner instanceof ChoiceObjectNode)

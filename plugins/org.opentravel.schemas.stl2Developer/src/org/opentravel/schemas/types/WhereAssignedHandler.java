@@ -24,13 +24,12 @@ import java.util.Collections;
 import java.util.List;
 
 import org.opentravel.schemacompiler.event.ModelElementListener;
-import org.opentravel.schemacompiler.event.OwnershipEvent;
-import org.opentravel.schemacompiler.event.ValueChangeEvent;
 import org.opentravel.schemas.node.Node;
 import org.opentravel.schemas.node.interfaces.ExtensionOwner;
 import org.opentravel.schemas.node.interfaces.INode;
 import org.opentravel.schemas.node.libraries.LibraryNode;
-import org.opentravel.schemas.node.listeners.BaseNodeListener;
+import org.opentravel.schemas.node.listeners.TypeUserAssignmentListener;
+import org.opentravel.schemas.node.typeProviders.AliasNode;
 import org.opentravel.schemas.types.whereused.TypeProviderWhereUsedNode;
 import org.opentravel.schemas.types.whereused.WhereUsedNode;
 import org.slf4j.Logger;
@@ -47,61 +46,9 @@ public class WhereAssignedHandler {
 	private static final Logger LOGGER = LoggerFactory.getLogger(WhereAssignedHandler.class);
 
 	// nodes that use this node as a type definition.
-	protected ArrayList<Node> users = new ArrayList<Node>();
-	protected WhereUsedNode whereUsedNode = null;
+	protected ArrayList<Node> users = new ArrayList<>();
+	protected WhereUsedNode<?> whereUsedNode = null;
 	protected TypeProvider owner = null;
-
-	/*********************************************************************************
-	 *
-	 * Listener class to add to the TL Model Element where the provider is assigned.
-	 *
-	 */
-	public class WhereAssignedListener extends BaseNodeListener {
-		private WhereAssignedHandler handler = null;
-
-		public WhereAssignedListener(Node node, WhereAssignedHandler handler) {
-			super(node);
-			this.handler = handler;
-		}
-
-		@Override
-		public void processOwnershipEvent(OwnershipEvent<?, ?> event) {
-			super.processOwnershipEvent(event);
-		}
-
-		@Override
-		public void processValueChangeEvent(ValueChangeEvent<?, ?> event) {
-			super.processValueChangeEvent(event); // logger.debug statements
-
-			switch (event.getType()) {
-			case TYPE_ASSIGNMENT_MODIFIED:
-				// Listeners can't be set/removed here, doing so makes the event stream not have the assignment event.
-				// LOGGER.debug("Type Assignment Modified event - " + getSource(event) + " on " + getNode()
-				// + " changed to: " + getNewValue(event) + "  from " + getOldValue(event));
-
-				// VWA and Core have event listeners but are not type users.
-				Node source = getSource(event);
-				if (source instanceof SimpleAttributeOwner)
-					source = ((SimpleAttributeOwner) source).getSimpleAttribute();
-
-				if (getNewValue(event) == getNode())
-					handler.add((TypeUser) source);
-
-				if (getOldValue(event) == getNode() && event.getOldValue() != event.getNewValue())
-					handler.remove((TypeUser) source);
-
-				break;
-			case DOCUMENTATION_MODIFIED:
-			case NAME_MODIFIED:
-				break;
-			default:
-				// LOGGER.debug(event.getType() + " - " + getSource(event) + " on " + getNode() + " changed to: "
-				// + getNewValue(event) + "  from " + getOldValue(event));
-
-				break;
-			}
-		}
-	}
 
 	/*********************************************************************************
 	 * 
@@ -113,57 +60,100 @@ public class WhereAssignedHandler {
 	}
 
 	/**
+	 * Add the passed user to the provider's where used list. Also add the user's library to the owner's library where
+	 * used list.
+	 * 
 	 * @param user
 	 *            type user to add if not already in list
 	 */
 	public void add(TypeUser user) {
-		// if (users.isEmpty())
-		// whereUsedNode = new TypeProviderWhereUsedNode(owner);
-
 		if (!users.contains(user)) {
 			users.add((Node) user);
+			// LOGGER.debug("Added " + user + " to " + owner + " where assigned list.");
+		}
+
+		// Also add to library where used
+		if (owner.getLibrary() != null)
+			owner.getLibrary().getWhereUsedHandler().add(user);
+	}
+
+	// TODO - make this the primary method and deprecate add()
+	public void addUser(TypeUser user) {
+		if (!users.contains(user)) {
+			users.add((Node) user);
+			setListener(user);
+
+			// Also add to library where used
+			if (owner.getLibrary() != null)
+				owner.getLibrary().getWhereUsedHandler().add(user);
+
 			// LOGGER.debug("Added " + user + " to " + owner + " where assigned list.");
 		}
 	}
 
 	/**
+	 * @return the owner
+	 */
+	public TypeProvider getOwner() {
+		return owner;
+	}
+
+	/**
 	 * This handler is associated with a type provider. It can have many listeners, one for each user of this type
 	 * provider.
+	 * <p>
+	 * However, a user can only have one type assigned.
 	 * 
 	 * @param user
 	 */
 	public void setListener(TypeUser user) {
-		for (ModelElementListener l : user.getTLModelObject().getListeners())
-			if (l instanceof WhereAssignedListener && ((BaseNodeListener) l).getNode() == owner) {
-				// FIXME - study startup and see why duplicates are trying to be created.
-				// LOGGER.debug("Trying to add a duplicate listener to " + user + " for " + owner);
-				return;
-			}
-		WhereAssignedListener listener = new WhereAssignedListener((Node) owner, this);
-		((Node) user).getTLModelObject().addListener(listener);
-		// listeners.add(listener); // Not sure why we are keeping array - debugging?
+		if (user.getTLModelObject() == null)
+			return;
+		// Make sure there is at most one assignment listener
+		for (ModelElementListener l : getAssignmentListeners(user))
+			user.getTLModelObject().removeListener(l);
+		// Make assignment
+		user.getTLModelObject().addListener(new TypeUserAssignmentListener(this));
 
 		// LOGGER.debug("Added listener for provider " + owner + " to user " + user);
 	}
 
 	public void setListener(ExtensionOwner owner) {
+		// NO-OP
+	}
 
+	/**
+	 * Get the assignment listener from passed user.
+	 * <p>
+	 * ONLY public to simplify JUnits
+	 * 
+	 * @param user
+	 * @return
+	 */
+	public List<TypeUserAssignmentListener> getAssignmentListeners(TypeUser user) {
+		List<TypeUserAssignmentListener> listeners = new ArrayList<>();
+		Collection<ModelElementListener> userListeners = Collections.emptyList();
+		if (user != null && user.getTLModelObject() != null)
+			userListeners = user.getTLModelObject().getListeners();
+		for (ModelElementListener l : userListeners)
+			if (l instanceof TypeUserAssignmentListener)
+				listeners.add((TypeUserAssignmentListener) l);
+		assert listeners.size() < 2;
+		// May not be set yet - assert listeners.get(0).getNode() == owner;
+		return listeners;
 	}
 
 	public void removeListener(TypeUser user) {
-		ModelElementListener listener = null;
-		for (ModelElementListener l : ((Node) user).getTLModelObject().getListeners())
-			if (l instanceof WhereAssignedListener)
-				if (((WhereAssignedListener) l).getNode() == owner)
-					listener = l;
-		if (listener != null) {
-			((Node) user).getTLModelObject().removeListener(listener);
-			// listeners.remove(listener);
-		} else if (user != null) {
-			// LOGGER.warn("Listener for " + user + " not found to be removed.");
-			return;
-		}
-		// LOGGER.debug("Removed listener from " + owner + " for user " + user);
+		if (user == null)
+			return; // No listeners to check
+
+		for (TypeUserAssignmentListener l : getAssignmentListeners(user))
+			// if (l.getNode() == owner || l.getNode().isDeleted())
+			user.getTLModelObject().removeListener(l);
+
+		assert getAssignmentListeners(user).isEmpty();
+
+		// LOGGER.debug("Removed assignment listener to " + owner + " from user " + user);
 	}
 
 	/**
@@ -172,7 +162,7 @@ public class WhereAssignedHandler {
 	@Deprecated
 	public Collection<Node> getWhereUsed() {
 		// Safety check - remove any deleted users
-		ArrayList<Node> whereused = new ArrayList<Node>();
+		ArrayList<Node> whereused = new ArrayList<>();
 		for (Node n : whereused)
 			if (n.isDeleted()) {
 				users.remove(n);
@@ -185,7 +175,7 @@ public class WhereAssignedHandler {
 	 * @return the unmodifiable collection of users of this type.
 	 */
 	public Collection<TypeUser> getWhereAssigned() {
-		ArrayList<TypeUser> whereused = new ArrayList<TypeUser>();
+		ArrayList<TypeUser> whereused = new ArrayList<>();
 		for (Node n : users)
 			if (n instanceof TypeUser)
 				whereused.add((TypeUser) n);
@@ -205,8 +195,14 @@ public class WhereAssignedHandler {
 		return users.size();
 	}
 
+	/**
+	 * Get all the users of this owner type provider as well as all the users of all the type providers under the
+	 * owningComponent()
+	 * 
+	 * @return
+	 */
 	public Collection<TypeUser> getWhereAssignedIncludingDescendants() {
-		List<TypeUser> ul = new ArrayList<TypeUser>();
+		List<TypeUser> ul = new ArrayList<>();
 		for (Node n : users)
 			if (n instanceof TypeUser)
 				ul.add((TypeUser) n);
@@ -214,12 +210,17 @@ public class WhereAssignedHandler {
 		if (((Node) owner).getOwningComponent() == null)
 			return ul; // happens when building inheritance wizard tree
 
-		for (TypeProvider n : ((Node) owner).getOwningComponent().getDescendants_TypeProviders())
+		for (TypeProvider n : ((Node) ((Node) owner).getOwningComponent()).getDescendants_TypeProviders())
 			if (!((Node) n).isDeleted())
 				ul.addAll(n.getWhereAssigned());
 		return ul;
 	}
 
+	/**
+	 * FIXME - this does not give correct counts.
+	 * 
+	 * @return
+	 */
 	public int getWhereAssignedIncludingDescendantsCount() {
 		// same logic as getWhereAssignedIncludingDescendants but without the array
 		// used in background decorators
@@ -231,7 +232,12 @@ public class WhereAssignedHandler {
 		if (((Node) owner).getOwningComponent() == null)
 			return count; // happens when building inheritance wizard tree
 
-		for (TypeProvider n : ((Node) owner).getOwningComponent().getDescendants_TypeProviders())
+		// TEST 8/8/2018 - for aliases, we don't want owner's count or its descendants
+		if (owner instanceof AliasNode)
+			return count;
+
+		// FIXME - for any child of owner, their users will be counted twice
+		for (TypeProvider n : ((Node) ((Node) owner).getOwningComponent()).getDescendants_TypeProviders())
 			if (!((Node) n).isDeleted())
 				count += n.getWhereAssignedCount();
 		return count;
@@ -244,7 +250,7 @@ public class WhereAssignedHandler {
 	 * @param replacement
 	 */
 	public void replace(TypeProvider replacement) {
-		List<TypeUser> users = new ArrayList<TypeUser>(getWhereAssigned());
+		List<TypeUser> users = new ArrayList<>(getWhereAssigned());
 		for (TypeUser n : users)
 			n.setAssignedType(replacement);
 	}
@@ -260,80 +266,84 @@ public class WhereAssignedHandler {
 	public void replace(TypeProvider replacement, LibraryNode scopeLibrary) {
 		if (replacement == null)
 			return;
-		List<TypeUser> users = new ArrayList<TypeUser>(getWhereAssigned());
+		List<TypeUser> users = new ArrayList<>(getWhereAssigned());
 		for (TypeUser n : users)
 			if (n.isEditable())
-				if (scopeLibrary == null || ((Node) n).getLibrary().equals(scopeLibrary)) {
-					((TypeUser) n).setAssignedType(replacement);
-					LOGGER.debug("replace " + n + " with " + replacement);
+				if (scopeLibrary == null || (n.getLibrary() != null && n.getLibrary().equals(scopeLibrary))) {
+					n.setAssignedType(replacement);
 				}
 	}
 
 	/**
-	 * Replace type assignment everywhere this node or any of its descendants are used as a type. An attempt is made to
-	 * match which child of the replacement is used based on name but if not found then the owning component is used.
-	 * 
-	 * @param replacement
-	 */
-	public void replaceAll(TypeProvider replacement) {
-		replaceAll(replacement, null);
-	}
-
-	/**
-	 * Replace this provider with replacement for all users of this provider as a type. Also replaces type usage of
-	 * descendants of this owner node with matching replace descendant when possible. Also does the TL properties. Note
-	 * - user counts may change when business replace core objects because core is also a valid simple type.
+	 * Replace this owner-provider type assignment everywhere this node or any of its descendants are used as a type.
+	 * <p>
+	 * An attempt is made to match which child of the replacement is used based on name but if not found then the owning
+	 * component is used.
+	 * <p>
+	 * Note - user counts may change when business replace core objects because core is also a valid simple type.
 	 * 
 	 * @param scopeLibrary
 	 *            - if not null, only change type users that are in the specified library.
 	 */
 	public void replaceAll(TypeProvider replacement, LibraryNode scopeLibrary) {
-		// Create map of replacement candidates
-		java.util.HashMap<String, TypeProvider> replacementTypes = new java.util.HashMap<String, TypeProvider>();
-		for (TypeProvider r : ((Node) replacement).getDescendants_TypeProviders())
-			replacementTypes.put(r.getName(), r);
-
-		// Replace where each type-provider child of this owner is used with it equivalent from replacement
-		for (TypeProvider child : ((Node) owner).getDescendants_TypeProviders()) {
-			Collection<TypeUser> kids = new ArrayList<TypeUser>(child.getWhereAssigned());
-			for (TypeUser n : kids) {
-				// Try to find a replacement equivalent from replacement object
-				String name = n.getAssignedType().getName();
-				// String name = n.getAssignedTLNamedEntity().getLocalName();
-				TypeProvider r = replacementTypes.get(name);
-				if (r == null) {
-					r = replacement;
-					LOGGER.debug("ReplaceAll equivalent not found for " + n + ", using " + r + " instead");
-				}
-				if (scopeLibrary == null || ((Node) n).getLibrary().equals(scopeLibrary))
-					if (n.isEditable()) {
-						((TypeUser) n).setAssignedType(r);
-						LOGGER.debug("replace " + n + " with " + r);
-					}
-				// LOGGER.debug("ReplaceAll replaced " + n + " with " + r);
-			}
-		}
+		// Create map of replacement's candidate type providers
+		ReplacementMapHandler mapHandler = new ReplacementMapHandler(replacement);
 
 		// Replace all users of this owner.
 		replace(replacement, scopeLibrary);
+
+		// Replace where each type-provider child of this owner is used with it equivalent from replacement
+		for (TypeProvider child : owner.getDescendants_TypeProviders()) {
+			if (child.getWhereAssignedHandler() != null)
+				child.getWhereAssignedHandler().replace(mapHandler.get(child), scopeLibrary);
+		}
 	}
 
-	public WhereUsedNode getWhereUsedNode() {
+	public WhereUsedNode<?> getWhereUsedNode() {
 		return whereUsedNode;
 	}
 
 	/**
 	 * Remove user from where used list.
+	 * <p>
+	 * Also removed from library's where used handler.
+	 * <p>
+	 * Also remove listeners.
 	 * 
 	 * @param typeUser
 	 *            - type user to remove from list
 	 * @return true if removed, false if not in list
 	 */
 	public boolean remove(TypeUser typeUser) {
+		boolean result = removeUser(typeUser);
+		removeListener(typeUser);
+		return result;
+	}
+
+	/**
+	 * Remove user from where used list. Also removed from library's where used handler. Listeners are not affected.
+	 * <p>
+	 * Safe to use in an event listener.
+	 * 
+	 * @param typeUser
+	 *            - type user to remove from list
+	 * @return true if removed, false if not in list
+	 */
+	public boolean removeUser(TypeUser typeUser) {
 		if (!users.contains(typeUser))
 			return false;
 		users.remove(typeUser);
+
+		// Also remove from library where used
+		if (owner.getLibrary() != null)
+			owner.getLibrary().getWhereUsedHandler().remove(typeUser);
+
 		return true;
+	}
+
+	public void clear() {
+		users.clear();
+		whereUsedNode = null;
 	}
 
 }

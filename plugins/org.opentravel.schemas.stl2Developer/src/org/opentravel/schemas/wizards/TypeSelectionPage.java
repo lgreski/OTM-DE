@@ -15,7 +15,6 @@
  */
 package org.opentravel.schemas.wizards;
 
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -46,12 +45,13 @@ import org.opentravel.schemacompiler.model.AbstractLibrary;
 import org.opentravel.schemacompiler.model.BuiltInLibrary;
 import org.opentravel.schemacompiler.model.TLLibrary;
 import org.opentravel.schemacompiler.model.XSDLibrary;
-import org.opentravel.schemas.node.CoreObjectNode;
 import org.opentravel.schemas.node.Node;
-import org.opentravel.schemas.node.SimpleComponentNode;
-import org.opentravel.schemas.node.VWA_Node;
-import org.opentravel.schemas.node.facets.FacetNode;
 import org.opentravel.schemas.node.interfaces.INode;
+import org.opentravel.schemas.node.libraries.LibraryNode;
+import org.opentravel.schemas.node.typeProviders.FacetProviderNode;
+import org.opentravel.schemas.node.typeProviders.SimpleTypeNode;
+import org.opentravel.schemas.node.typeProviders.VWA_Node;
+import org.opentravel.schemas.node.typeProviders.facetOwners.CoreObjectNode;
 import org.opentravel.schemas.trees.type.TypeSelectionFilter;
 import org.opentravel.schemas.trees.type.TypeTree;
 import org.opentravel.schemas.trees.type.TypeTreeNameFilter;
@@ -59,8 +59,6 @@ import org.opentravel.schemas.trees.type.TypeTreeNamespaceFilter;
 import org.opentravel.schemas.types.TypeProvider;
 import org.opentravel.schemas.types.TypeUser;
 import org.opentravel.schemas.widgets.WidgetFactory;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * Wizard to allow user to select a type for the passed node objects.
@@ -69,21 +67,14 @@ import org.slf4j.LoggerFactory;
  * 
  */
 public class TypeSelectionPage extends WizardPage {
-	private static final Logger LOGGER = LoggerFactory.getLogger(TypeSelectionPage.class);
+	// private static final Logger LOGGER = LoggerFactory.getLogger(TypeSelectionPage.class);
 
 	private INode curNode = null;
-	private ArrayList<Node> curNodeList = null;
-	private boolean listMode = false;
-	ArrayList<Node> firstNodeOnly = new ArrayList<Node>();
 	private Node selectedNode;
-	private Composite container;
-	private TypeTree typeTree;
 	private TreeViewer treeViewer;
 	private TypeTreeNamespaceFilter nsFilter;
 	private TypeTreeNameFilter nameFilter;
 	private TypeSelectionFilter typeSelectionFilter;
-	private IContentProvider typeTreeContentProvider;
-	private Text name;
 	private Text nameSpace;
 	private Text typeText;
 	private Text descriptionText;
@@ -92,7 +83,7 @@ public class TypeSelectionPage extends WizardPage {
 	private TypeSelectionListener typeSelectionListener;
 	private boolean canNavigateToNextPage = true;
 
-	private final Map<Button, Class<? extends AbstractLibrary>> radioButtons = new HashMap<Button, Class<? extends AbstractLibrary>>();
+	private final Map<Button, Class<? extends AbstractLibrary>> radioButtons = new HashMap<>();
 
 	protected TypeSelectionPage(final String pageName, final String title, String description,
 			final ImageDescriptor titleImage, final INode n) {
@@ -102,28 +93,6 @@ public class TypeSelectionPage extends WizardPage {
 		curNode = n;
 		checkCore((Node) n);
 		// LOGGER.debug("Created Initial Type Selection Page for node: " + n);
-	}
-
-	/**
-	 * Set up the page to ask if to make changes to the first node in the list or all of them.
-	 */
-	protected TypeSelectionPage(final String pageName, final String title, String description,
-			final ImageDescriptor titleImage, ArrayList<Node> nodeList) {
-
-		this(pageName, title, description, titleImage, nodeList.get(0));
-
-		if (nodeList == null || nodeList.size() <= 0)
-			return;
-
-		curNodeList = new ArrayList<Node>(nodeList);
-		curNode = curNodeList.get(0); // give tree something to work with.
-		firstNodeOnly.add(curNodeList.get(0)); // used for buttons
-		if (curNodeList.size() > 1)
-			listMode = true;
-
-		// LOGGER.debug("Page initialized.");
-		// for (INode n : curNodeList)
-		// LOGGER.debug(" Node: " + n);
 	}
 
 	public void setTypeSelectionListener(TypeSelectionListener listener) {
@@ -140,6 +109,10 @@ public class TypeSelectionPage extends WizardPage {
 
 	@Override
 	public void createControl(final Composite parent) {
+		Text name;
+		Composite container;
+		TypeTree typeTree;
+
 		container = new Composite(parent, SWT.BORDER);
 		container.setLayout(new GridLayout(2, false));
 
@@ -152,24 +125,13 @@ public class TypeSelectionPage extends WizardPage {
 
 		name = WidgetFactory.createText(container, SWT.READ_ONLY | SWT.BORDER);
 		name.setLayoutData(gridData);
-		// (if a node list is presented, show the names of all of them
-		if (listMode) {
-			String nlNames = "";
-			int i = 0;
-			for (INode n : curNodeList) {
-				if (i++ > 0)
-					nlNames = nlNames.concat(", ");
-				nlNames = nlNames.concat(n.getName());
-			}
-			name.setText(nlNames);
-			final Label nlChoiceLabel = new Label(container, SWT.NONE);
-			nlChoiceLabel.setText("Assign to: ");
-			choiceButtons(container);
-		} else
-			name.setText(curNode.getName());
+		name.setText(curNode.getNameWithPrefix());
 
 		final Label label = new Label(container, SWT.NULL);
-		label.setText("Type:");
+		if (curNode instanceof LibraryNode)
+			label.setText("Library:");
+		else
+			label.setText("Object:");
 
 		typeText = WidgetFactory.createText(container, SWT.BORDER);
 		typeText.setLayoutData(gridData);
@@ -178,8 +140,11 @@ public class TypeSelectionPage extends WizardPage {
 
 		// Namespace field
 		final Label nsLabel = new Label(container, SWT.NULL);
-		nsLabel.setText("Type Namespace:");
-		nameSpace = WidgetFactory.createText(container, SWT.BORDER);
+		if (curNode instanceof LibraryNode)
+			nsLabel.setText("Library Namespace:");
+		else
+			nsLabel.setText("Type Namespace:");
+		nameSpace = WidgetFactory.createText(container, SWT.BORDER | SWT.READ_ONLY);
 		nameSpace.setLayoutData(gridData);
 		nameSpace.addKeyListener(new TypeKeyListener());
 
@@ -190,13 +155,15 @@ public class TypeSelectionPage extends WizardPage {
 		descriptionText.setLayoutData(gridData);
 
 		// Tree filter by namespace
-		final Label l2 = new Label(container, SWT.NULL);
-		l2.setText("Show namespaces:");
-		radioButtons(container);
+		if (!(curNode instanceof LibraryNode)) {
+			final Label l2 = new Label(container, SWT.NULL);
+			l2.setText("Show namespaces:");
+			radioButtons(container);
+		}
 
 		// Type Tree
 		// typeTree = new TypeTree(Node.getModelNode(), typeTreeContentProvider);
-		typeTree = new TypeTree(Node.getModelNode(), null);
+		typeTree = new TypeTree(Node.getModelNode(), null); // sets up type tree view part with TypeTreeContentProvider
 		treeViewer = typeTree.setUpViewer(container);
 		gridData = new GridData(SWT.FILL, SWT.FILL, true, true);
 		gridData.horizontalSpan = 2;
@@ -235,7 +202,6 @@ public class TypeSelectionPage extends WizardPage {
 	}
 
 	public void setTypeTreeContentProvider(IContentProvider typeTreeContentProvider) {
-		this.typeTreeContentProvider = typeTreeContentProvider;
 		if (treeViewer != null)
 			treeViewer.setContentProvider(typeTreeContentProvider);
 		// LOGGER.debug("Set content provider to: " + typeTreeContentProvider.getClass().getSimpleName());
@@ -249,12 +215,7 @@ public class TypeSelectionPage extends WizardPage {
 		return selectedNode;
 	}
 
-	protected ArrayList<Node> getCurNodeList() {
-		return curNodeList;
-	}
-
 	private class CurrentNodeFilter extends ViewerFilter {
-
 		private List<Node> excluded;
 
 		public CurrentNodeFilter(List<Node> excluded) {
@@ -263,40 +224,28 @@ public class TypeSelectionPage extends WizardPage {
 
 		@Override
 		public boolean select(Viewer viewer, Object parentElement, Object element) {
-			if (conatinReference(excluded, element)) {
-				return false;
-			}
-			return true;
+			return !containReference(excluded, element);
 		}
 
-		private boolean conatinReference(List<Node> objects, Object element) {
-			for (Node o : objects) {
-				if (o == element) {
+		private boolean containReference(List<Node> objects, Object element) {
+			for (Node o : objects)
+				if (o == element)
 					return true;
-				}
-			}
 			return false;
 		}
 	}
 
 	private List<Node> getExcludeNodes(INode node) {
 		Node n = (Node) node;
-		if (n.getOwningComponent() instanceof VWA_Node && n instanceof SimpleComponentNode)
-			return Collections.singletonList(n.getOwningComponent());
+		if (n.getOwningComponent() instanceof VWA_Node && n instanceof SimpleTypeNode)
+			return Collections.singletonList((Node) n.getOwningComponent());
 
-		if (n.getOwningComponent() instanceof CoreObjectNode && n instanceof SimpleComponentNode)
-			return Collections.singletonList(n.getOwningComponent());
+		if (n.getOwningComponent() instanceof CoreObjectNode && n instanceof SimpleTypeNode)
+			return Collections.singletonList((Node) n.getOwningComponent());
 
 		if (n instanceof CoreObjectNode)
 			return Collections.singletonList(n);
 
-		// if (NodeUtils.checker(n).ownerIs(ComponentNodeType.VWA).is(PropertyNodeType.SIMPLE).get()) {
-		// return Collections.singletonList(n.getOwningComponent());
-		// } else if (NodeUtils.checker(n).ownerIs(ComponentNodeType.CORE).is(PropertyNodeType.SIMPLE).get()) {
-		// return Collections.singletonList(n.getOwningComponent());
-		// } else if (n instanceof CoreObjectNode) {
-		// return Collections.singletonList(n);
-		// }
 		return Collections.emptyList();
 	}
 
@@ -306,7 +255,7 @@ public class TypeSelectionPage extends WizardPage {
 			checkCore((Node) curNode);
 			final IStructuredSelection iss = (IStructuredSelection) event.getSelection();
 			final Object object = iss.getFirstElement();
-			if ((object == null) || (!(object instanceof Node))) {
+			if (!(object instanceof Node)) {
 				return;
 			}
 			final Node n = (Node) object;
@@ -335,6 +284,7 @@ public class TypeSelectionPage extends WizardPage {
 	private final class TypeKeyListener implements KeyListener {
 		@Override
 		public void keyPressed(final KeyEvent e) {
+			// NO-OP
 		}
 
 		@Override
@@ -353,16 +303,11 @@ public class TypeSelectionPage extends WizardPage {
 		public void widgetSelected(final SelectionEvent e) {
 			if (e.widget instanceof Button) {
 				final Button b = (Button) e.widget;
-				if (b.getData() == null) {
-					// Namespaces radio button selected
-					nsFilter.setLibrary(radioButtons.get(b));
-				} else {
-					// Property selection radio button
-					curNodeList = (ArrayList<Node>) b.getData();
-				}
+				// Namespace radio button selected
+				nsFilter.setLibrary(radioButtons.get(b));
+				treeViewer.expandAll();
+				treeViewer.refresh();
 			}
-			treeViewer.expandAll();
-			treeViewer.refresh();
 		}
 	}
 
@@ -391,24 +336,6 @@ public class TypeSelectionPage extends WizardPage {
 		radio.setText("XSD Schemas");
 		radioButtons.put(radio, XSDLibrary.class);
 		radio.addSelectionListener(new ButtonSelectionHandler());
-
-	}
-
-	private void choiceButtons(Composite c) {
-		final Composite ch2 = new Composite(c, SWT.NULL);
-		final GridLayout glh2 = new GridLayout(4, false);
-		ch2.setLayout(glh2);
-
-		Button radio = new Button(ch2, SWT.RADIO);
-		radio.setText("All");
-		radio.setSelection(true);
-		radio.setData(curNodeList);
-		radio.addSelectionListener(new ButtonSelectionHandler());
-
-		radio = new Button(ch2, SWT.RADIO);
-		radio.setText(curNodeList.get(0).getName() + " Only");
-		radio.setData(firstNodeOnly);
-		radio.addSelectionListener(new ButtonSelectionHandler());
 	}
 
 	/**
@@ -419,7 +346,7 @@ public class TypeSelectionPage extends WizardPage {
 	 */
 	protected void checkCore(Node curNode) {
 		if (curNode instanceof CoreObjectNode) {
-			FacetNode sum = (FacetNode) ((CoreObjectNode) curNode).getFacet_Summary();
+			FacetProviderNode sum = ((CoreObjectNode) curNode).getFacet_Summary();
 			// check assigned types and assure they have parents
 			for (Node n : sum.getChildren()) {
 				if (n instanceof TypeUser) {

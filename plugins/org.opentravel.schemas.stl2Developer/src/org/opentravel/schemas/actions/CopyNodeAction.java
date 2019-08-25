@@ -18,6 +18,7 @@ package org.opentravel.schemas.actions;
 import java.util.List;
 
 import org.opentravel.schemas.node.Node;
+import org.opentravel.schemas.node.interfaces.LibraryMemberInterface;
 import org.opentravel.schemas.node.libraries.LibraryNode;
 import org.opentravel.schemas.properties.StringProperties;
 import org.opentravel.schemas.stl2developer.MainWindow;
@@ -48,6 +49,8 @@ public class CopyNodeAction extends OtmAbstractAction {
 	public boolean isEnabled() {
 		// Enabled if this is unmanaged or the head is editable and not patch
 		LibraryNode ln = mc.getSelectedNode_NavigatorView().getLibrary();
+		if (ln == null)
+			return false;
 		if (!ln.isManaged())
 			return ln.isEditable();
 		return (ln.getChain().getHead().isEditable() && !ln.getChain().getHead().isPatchVersion());
@@ -58,23 +61,29 @@ public class CopyNodeAction extends OtmAbstractAction {
 	 */
 	private final String CopyNameSuffix = "_Copy";
 
+	// This is called when copying via navigator menus.
+	// 9/4/2018 - nav menu, right click->copy with an object selected.
+	// See ImportObject...(link above)
 	public void copySelectedNodes(List<Node> nodes) {
 		Node lastCloned = null;
 		if (nodes == null || nodes.isEmpty())
 			return;
 
 		// Determine where to put the new nodes.
-		LibraryNode targetLibrary = null;
+		LibraryNode targetLibrary = nodes.get(0).getLibrary();
 		if (!nodes.get(0).getLibrary().isEditable())
-			targetLibrary = nodes.get(0).getChain().getHead();
+			targetLibrary = nodes.get(0).getLibrary().getHead();
+		// targetLibrary = nodes.get(0).getChain().getHead();
 
-		Node clone = null;
+		LibraryMemberInterface clone = null;
 		for (Node n : nodes) {
-			clone = n.clone(targetLibrary, CopyNameSuffix);
-			if (clone != null) {
-				if (targetLibrary != null)
-					targetLibrary.addMember(clone);
-				lastCloned = clone;
+			if (n instanceof LibraryMemberInterface) {
+				clone = ((LibraryMemberInterface) n).clone(targetLibrary, CopyNameSuffix);
+				if (clone != null) {
+					if (targetLibrary != null)
+						targetLibrary.addMember(clone);
+					lastCloned = (Node) clone;
+				}
 			}
 		}
 		if (lastCloned != null) {

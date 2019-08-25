@@ -26,7 +26,7 @@ import org.opentravel.schemacompiler.repository.ProjectItem;
 import org.opentravel.schemacompiler.repository.RepositoryItem;
 import org.opentravel.schemas.controllers.DefaultProjectController.OpenedProject;
 import org.opentravel.schemas.node.ProjectNode;
-import org.opentravel.schemas.node.interfaces.LibraryInterface;
+import org.opentravel.schemas.node.libraries.LibraryChainNode;
 import org.opentravel.schemas.node.libraries.LibraryNavNode;
 import org.opentravel.schemas.node.libraries.LibraryNode;
 
@@ -37,6 +37,13 @@ import org.opentravel.schemas.node.libraries.LibraryNode;
  * 
  */
 public interface ProjectController {
+
+	/**
+	 * @param lcn
+	 * @param tlLib
+	 * @return
+	 */
+	public LibraryNode add(LibraryChainNode lcn, AbstractLibrary tlLib);
 
 	/**
 	 * Add a TL Library to the project and create a LibraryNode to represent it.
@@ -59,16 +66,48 @@ public interface ProjectController {
 	 * 
 	 * Does NOT add them to the Node project model.
 	 * 
-	 * @see {@link ProjectNode#add(FileList)}
+	 * @see {@link ProjectNode#addToTL(FileList)}
 	 */
 	public List<ProjectItem> addLibrariesToTLProject(Project project, List<File> libraryFiles);
+
+	/**
+	 * Save and close the project. If it is the default project all children are closed without saving.
+	 * 
+	 * @return
+	 * 
+	 * @see {@link org.opentravel.schemas.commands.CloseProjectHandler#execute(ExecutionEvent)}
+	 */
+	boolean close(ProjectNode project);
+
+	/**
+	 * Saves, closes and removes all projects from the model
+	 * 
+	 */
+	void closeAll();
+
+	/**
+	 * Creates new project complete with TL model
+	 */
+	ProjectNode create(File file, String ID, String name, String description);
+
+	/**
+	 * @return new list of open projects. Returns empty list if there are no projects.
+	 */
+	List<ProjectNode> getAll();
 
 	/**
 	 * @return the builtInProject
 	 */
 	public ProjectNode getBuiltInProject();
 
+	ProjectNode getDefaultProject();
+
 	public String getDefaultUnmanagedNS();
+
+	/**
+	 * @return namespace of the project
+	 */
+	String getNamespace();
 
 	/**
 	 * Governed namespaces are namespaces that are protected via the repositories. Open governed namespaces are assigned
@@ -96,16 +135,22 @@ public interface ProjectController {
 	 */
 	public void newProject(String defaultName, String selectedRoot, String selectedExt);
 
+	/**
+	 * Opens already existing project(s) using a selection dialog and adds it to the model. Opens all the libraries in
+	 * the project.
+	 */
+	void open();
+
 	public OpenedProject open(String fileName, IProgressMonitor monitor);
 
 	public OpenedProject openTLProject(String projectFile);
 
 	public void refreshMaster();
 
-	/**
-	 * Remove the passed library from the passed project.
-	 */
-	public void remove(LibraryInterface library, ProjectNode pn);
+	// /**
+	// * Remove the passed library from the passed project.
+	// */
+	// public void remove(LibraryInterface library, ProjectNode pn);
 
 	/**
 	 * Remove the associated library from the associated project both in the TL and GUI models.
@@ -117,60 +162,10 @@ public interface ProjectController {
 	 */
 	public void remove(List<LibraryNavNode> libNavlist);
 
-	public void saveState();
-
-	LibraryNode add(LibraryNode ln, AbstractLibrary tlLib);
-
-	/**
-	 * Save and close the project. If it is the default project all children are closed without saving.
-	 * 
-	 * @return
-	 * 
-	 * @see {@link org.opentravel.schemas.commands.CloseProjectHandler#execute(ExecutionEvent)}
-	 */
-	boolean close(ProjectNode project);
-
-	/**
-	 * Saves, closes and removes all projects from the model
-	 * 
-	 */
-	void closeAll();
-
-	/**
-	 * Creates new project complete with TL model
-	 */
-	ProjectNode create(File file, String ID, String name, String description);
-
-	/**
-	 * @return new list of open projects. Returns empty list if there are no projects.
-	 */
-	List<ProjectNode> getAll();
-
-	ProjectNode getDefaultProject();
-
-	/**
-	 * @return namespace of the project
-	 */
-	String getNamespace();
-
-	/**
-	 * Opens already existing project(s) using a selection dialog and adds it to the model. Opens all the libraries in
-	 * the project.
-	 */
-	void open();
-
 	/**
 	 * Save the project.
 	 */
 	void save();
-
-	/**
-	 * Saves the given projects to the physical files / repository
-	 * 
-	 * @param projects
-	 *            is list of {@link ProjectNode}s to be saved
-	 */
-	void save(List<ProjectNode> projects);
 
 	/**
 	 * Saves the given project to the physical file / repository
@@ -178,12 +173,8 @@ public interface ProjectController {
 	 * @param project
 	 *            {@link ProjectNode} to be saved
 	 */
-	void save(ProjectNode project);
+	public boolean save(ProjectNode project);
 
-	/**
-	 * Saves all projects
-	 * 
-	 */
-	void saveAll();
+	public void saveState();
 
 }

@@ -22,9 +22,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 import org.eclipse.swt.graphics.Image;
-import org.opentravel.schemas.node.facets.ContextualFacetNode;
 import org.opentravel.schemas.node.libraries.LibraryChainNode;
-import org.opentravel.schemas.node.libraries.LibraryNode;
+import org.opentravel.schemas.node.typeProviders.ContextualFacetNode;
 import org.opentravel.schemas.properties.Images;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -71,12 +70,10 @@ public class AggregateNode extends NavNode {
 	 * @return
 	 */
 	public void add(ComponentNode nodeToAdd) {
-		// addPreTests(nodeToAdd); // Type safety
-		// LOGGER.debug("Adding " + nodeToAdd + " to aggregate of" + getLibrary());
-
 		// If this is a service then just add to the service root as services are not versioned objects
 		if (nodeToAdd instanceof ServiceNode) {
-			getChildren().add(nodeToAdd);
+			// getChildren().add(nodeToAdd);
+			getChildrenHandler().add(nodeToAdd);
 			return;
 		}
 
@@ -90,7 +87,8 @@ public class AggregateNode extends NavNode {
 		// contextual facets are not versioned but are displayed in aggregate.
 		// Add a version node to make the handling consistent.
 		if (nodeToAdd instanceof ContextualFacetNode) {
-			vn = new VersionNode(this, nodeToAdd);
+			getChildrenHandler().add(new VersionNode(nodeToAdd));
+			// vn = new VersionNode(this, nodeToAdd);
 			return;
 		}
 
@@ -100,12 +98,12 @@ public class AggregateNode extends NavNode {
 		// Get the version node for this resource chain if it exists
 		if (duplicates.isEmpty())
 			// Add a version node to this aggregates children
-			vn = new VersionNode(this);
-		else
+			getChildrenHandler().add(new VersionNode(nodeToAdd));
+		else {
 			vn = duplicates.get(0).getVersionNode();
-
-		// Add this node to the version chain
-		vn.add(nodeToAdd);
+			// Add this node to the version chain
+			vn.add(nodeToAdd);
+		}
 
 		// LOGGER.debug("Added " + nodeToAdd.getNameWithPrefix() + " to version chain.");
 		return;
@@ -117,10 +115,10 @@ public class AggregateNode extends NavNode {
 	 */
 	private List<Node> findExactMatches(List<Node> versionNodes, Node match) {
 		String matchName = match.getName();
-		List<Node> ret = new ArrayList<Node>();
+		List<Node> ret = new ArrayList<>();
 		for (Node c : versionNodes) {
 			assert c instanceof VersionNode;
-			if (c.getName().equals(matchName))
+			if (c.getName() != null && c.getName().equals(matchName))
 				if (((VersionNode) c).get().getClass() == match.getClass())
 					if (((VersionNode) c).get().getLibrary() != match.getLibrary())
 						ret.add(c);
@@ -132,29 +130,32 @@ public class AggregateNode extends NavNode {
 	 * Remove the version node or version node associated with the passed node from the aggregate child list.
 	 */
 	public void remove(Node node) {
-		if (!(node instanceof VersionNode))
+		if (!(node instanceof ServiceNode) && (!(node instanceof VersionNode)))
 			node = node.getVersionNode();
-		if (!getChildren().remove(node))
-			LOGGER.warn(node + " was not found to remove from aggregate node.");
-		// NOTE - this warning happens when importing contextual facets and i don't know why
-		// it happens when moving resources - called twice and the second time it has already been removed
+		getChildrenHandler().remove(node);
 	}
 
+	/**
+	 * Close all the children then clear children handler.
+	 */
 	@Override
 	public void close() {
-		if (getParent() != null)
-			getParent().getChildren().remove(this);
-		getChildren().clear();
-		setLibrary(null);
-		modelObject = null;
+		List<Node> kids = getChildrenHandler().getChildren_New();
+		for (Node n : kids) {
+			n.close();
+			n.setParent(null);
+			getChildrenHandler().clear(n);
+		}
+		setParent(null);
 		deleted = true;
 	}
 
 	/**
 	 * Does the child list contain the passed node.
 	 * <p>
-	 * Does <b>not</b> get the version node if an object is passed.
+	 * Simply checks if nodes is in array and does <b>not</b> get the version node if an object is passed.
 	 */
+	@Override
 	public boolean contains(Node node) {
 		return getChildren().contains(node);
 	}
@@ -162,14 +163,6 @@ public class AggregateNode extends NavNode {
 	@Override
 	public Image getImage() {
 		return Images.getImageRegistry().get("aggregateFolder");
-	}
-
-	/**
-	 * @return library at the head of the parent library chain
-	 */
-	@Override
-	public LibraryNode getLibrary() {
-		return parent != null ? parent.getLibrary() : null;
 	}
 
 	/**
@@ -194,9 +187,9 @@ public class AggregateNode extends NavNode {
 		return parent != null ? parent.isInTLLibrary() : false;
 	}
 
-	@Override
-	public boolean isLibraryContainer() {
-		return aggType == AggregateType.Versions ? true : false;
-	}
+	// @Override
+	// public boolean isLibraryContainer() {
+	// return aggType == AggregateType.Versions ? true : false;
+	// }
 
 }

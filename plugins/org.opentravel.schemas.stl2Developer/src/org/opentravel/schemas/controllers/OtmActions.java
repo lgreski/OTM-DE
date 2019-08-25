@@ -16,6 +16,7 @@
 package org.opentravel.schemas.controllers;
 
 import java.util.ArrayList;
+import java.util.List;
 
 import org.eclipse.core.runtime.Assert;
 import org.eclipse.swt.widgets.Event;
@@ -26,16 +27,17 @@ import org.opentravel.schemas.actions.SetObjectNameAction;
 import org.opentravel.schemas.commands.AddNodeHandler2;
 import org.opentravel.schemas.controllers.DefaultContextController.ContextViewType;
 import org.opentravel.schemas.node.ComponentNode;
-import org.opentravel.schemas.node.ConstraintHandler;
 import org.opentravel.schemas.node.Node;
 import org.opentravel.schemas.node.NodeFinders;
-import org.opentravel.schemas.node.SimpleTypeNode;
+import org.opentravel.schemas.node.handlers.ConstraintHandler;
 import org.opentravel.schemas.node.interfaces.INode;
 import org.opentravel.schemas.node.interfaces.LibraryMemberInterface;
 import org.opentravel.schemas.node.libraries.LibraryNode;
 import org.opentravel.schemas.node.properties.ElementNode;
 import org.opentravel.schemas.node.properties.PropertyNode;
 import org.opentravel.schemas.node.properties.PropertyNodeType;
+import org.opentravel.schemas.node.properties.TypedPropertyNode;
+import org.opentravel.schemas.node.typeProviders.SimpleTypeNode;
 import org.opentravel.schemas.properties.Messages;
 import org.opentravel.schemas.stl2developer.DialogUserNotifier;
 import org.opentravel.schemas.stl2developer.OtmRegistry;
@@ -228,22 +230,18 @@ public class OtmActions {
 		return clearExtends;
 	}
 
+	// Called when property view type selector is used
 	private void propertyTypeSelector(final OtmEventData wd) {
 		Node n = wd.getNode();
 		// If no node was saved with the event data, see if there is a current node selected.
-		if (n == null) {
-			if ((n = getPropertySelection()) == null) {
-				return;
-			}
-		}
+		if (n == null && ((n = getPropertySelection()) == null))
+			return;
 
-		ArrayList<Node> list = new ArrayList<Node>();
+		List<Node> list = new ArrayList<>();
 		list.add(n);
-		final TypeSelectionWizard wizard = new TypeSelectionWizard(list);
+		final TypeSelectionWizard wizard = new TypeSelectionWizard(n);
 		if (wizard.run(OtmRegistry.getActiveShell())) {
-			AssignTypeAction.execute(wizard.getList(), wizard.getSelection());
-		} else {
-			DialogUserNotifier.openInformation("No Selection", Messages.getString("OtmW.101")); //$NON-NLS-1$
+			AssignTypeAction.execute(list, wizard.getSelection());
 		}
 	}
 
@@ -290,7 +288,7 @@ public class OtmActions {
 	}
 
 	private void typeSelector(final OtmEventData wd) {
-		ArrayList<Node> list = new ArrayList<Node>();
+		ArrayList<Node> list = new ArrayList<>();
 		Node n = wd.getNode();
 		if (n != null)
 			list.add(n);
@@ -617,8 +615,8 @@ public class OtmActions {
 
 	private void setPropertyType(final OtmEventData ed) {
 		final INode pNode = mc.getCurrentNode_PropertiesView();
-		if (pNode != null)
-			((PropertyNode) pNode).setAssignedType((TypeProvider) NodeFinders.findNodeByID(ed.getText()));
+		if (pNode != null && pNode instanceof TypedPropertyNode)
+			((TypedPropertyNode) pNode).setAssignedType((TypeProvider) NodeFinders.findNodeByID(ed.getText()));
 		mc.refresh(pNode);
 	}
 

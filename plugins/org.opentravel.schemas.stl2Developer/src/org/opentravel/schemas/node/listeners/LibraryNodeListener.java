@@ -16,11 +16,10 @@
 package org.opentravel.schemas.node.listeners;
 
 import org.opentravel.schemacompiler.event.OwnershipEvent;
-import org.opentravel.schemas.node.ComponentNode;
 import org.opentravel.schemas.node.Node;
-import org.opentravel.schemas.node.VersionNode;
-import org.opentravel.schemas.node.facets.ContextualFacetNode;
 import org.opentravel.schemas.node.libraries.LibraryNode;
+import org.opentravel.schemas.node.typeProviders.ContextualFacetNode;
+import org.opentravel.schemas.types.TypeUser;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -40,54 +39,51 @@ public class LibraryNodeListener extends NodeIdentityListener implements INodeLi
 	@Override
 	public void processOwnershipEvent(OwnershipEvent<?, ?> event) {
 		Node affectedNode = getAffectedNode(event);
-		LOGGER.debug("Library Ownership event: " + event.getType() + " this = " + thisNode + " affected = "
-				+ affectedNode);
+		// LOGGER.debug(
+		// "Library Ownership event: " + event.getType() + " this = " + thisNode + " affected = " + affectedNode);
 		LibraryNode ln = (LibraryNode) thisNode;
 
 		switch (event.getType()) {
 		case MEMBER_ADDED:
-			LOGGER.debug("Member adding Ownership change event: added " + affectedNode + " to " + thisNode);
+			// LOGGER.debug("Member adding Ownership change event: added " + affectedNode + " to " + thisNode);
 			// No listener on TLObject - do nothing
 			if (affectedNode == null)
 				return;
-
-			// Add the affected node to this library
-			if (affectedNode instanceof ContextualFacetNode) {
-				if (affectedNode.getParent() != null)
-					break; // do nothing
+			// In version 1.5 there will be an event for contextual facets, ignore them
+			if (affectedNode instanceof ContextualFacetNode)
 				if (!((ContextualFacetNode) affectedNode).canBeLibraryMember())
-					break; // do nothing
-				// else
-				// LOGGER.debug("Contextual facet with no parent.");
-			}
-			if (affectedNode instanceof VersionNode)
-				ln.linkMember(((VersionNode) affectedNode).getNewestVersion());
-			else
-				ln.linkMember(affectedNode);
-			if (ln.isInChain()) {
-				ln.getChain().add((ComponentNode) affectedNode);
-			}
+					break;
+			ln.getChildrenHandler().add(affectedNode);
+
+			// TODO - versions, aggregates
+
+			// Set where used
+			addAssignedTypes(affectedNode);
 			break;
 
 		case MEMBER_REMOVED:
-			LOGGER.debug("Ownership change event: removing " + affectedNode + " from " + thisNode);
+			// LOGGER.debug("Ownership change event: removing " + affectedNode + " from " + thisNode);
 			// Remove affected from this library
 			if (affectedNode == null || affectedNode.getParent() == null)
 				return; // happens during deletes
-			// LOGGER.debug("ERROR -- null parent.");
-			Node parent = affectedNode.getParent();
 
-			if (parent instanceof VersionNode)
-				parent = parent.getParent();
-			if (parent == null || parent instanceof ComponentNode) {
-				// LOGGER.debug("Library is not the parent for " + affectedNode);
-				// This must be a ContextualFacet (or similar) and will be removed with parent
-				break; // do nothing
-			}
-			if (ln.getChain() != null)
-				ln.getChain().removeAggregate((ComponentNode) affectedNode);
+			// Clear assigned types
+			clearAssignedTypes(affectedNode);
+			// 5/2/2018 - dmh - made symmetric with Member_Added
+			// // FIXME - should this be part of delete()
+			// for (TypeUser n : affectedNode.getDescendants_TypeUsers())
+			// if (n.getAssignedType() != null)
+			// n.getAssignedType().getWhereAssignedHandler().removeUser(n);
+			// if (affectedNode instanceof TypeUser)
+			// if (((TypeUser) affectedNode).getAssignedType() != null)
+			// ((TypeUser) affectedNode).getAssignedType().getWhereAssignedHandler()
+			// .removeUser((TypeUser) affectedNode);
+			//
+			// // FIXME - should remove be destructive? It is used in addMember to move and this breaks that.
+			// // affectedNode.delete();
 
-			affectedNode.unlinkNode();
+			ln.getChildrenHandler().remove(affectedNode);
+			// TODO - versions, aggregates
 			break;
 
 		default:
@@ -95,5 +91,34 @@ public class LibraryNodeListener extends NodeIdentityListener implements INodeLi
 			// + affectedNode);
 			break;
 		}
+	}
+
+	/**
+	 * Remove affected node and all its type user descendants from type provider's where used lists.
+	 * 
+	 * @param affectedNode
+	 */
+	private void clearAssignedTypes(Node affectedNode) {
+		for (TypeUser n : affectedNode.getDescendants_TypeUsers())
+			if (n.getAssignedType() != null)
+				n.getAssignedType().getWhereAssignedHandler().removeUser(n);
+		if (affectedNode instanceof TypeUser)
+			if (((TypeUser) affectedNode).getAssignedType() != null)
+				((TypeUser) affectedNode).getAssignedType().getWhereAssignedHandler()
+						.removeUser((TypeUser) affectedNode);
+	}
+
+	/**
+	 * Add affected node and all its type user descendants to their type provider's where used lists.
+	 * 
+	 * @param affectedNode
+	 */
+	private void addAssignedTypes(Node affectedNode) {
+		for (TypeUser n : affectedNode.getDescendants_TypeUsers())
+			if (n.getAssignedType() != null)
+				n.getAssignedType().getWhereAssignedHandler().addUser(n);
+		if (affectedNode instanceof TypeUser)
+			if (((TypeUser) affectedNode).getAssignedType() != null)
+				((TypeUser) affectedNode).getAssignedType().getWhereAssignedHandler().addUser((TypeUser) affectedNode);
 	}
 }

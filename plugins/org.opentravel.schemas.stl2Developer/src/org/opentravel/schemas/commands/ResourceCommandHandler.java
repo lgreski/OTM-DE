@@ -26,8 +26,8 @@ import org.eclipse.jface.resource.ImageDescriptor;
 import org.eclipse.swt.graphics.Image;
 import org.eclipse.swt.widgets.Event;
 import org.opentravel.schemacompiler.model.TLResource;
-import org.opentravel.schemas.node.BusinessObjectNode;
 import org.opentravel.schemas.node.Node;
+import org.opentravel.schemas.node.interfaces.ResourceMemberInterface;
 import org.opentravel.schemas.node.libraries.LibraryNode;
 import org.opentravel.schemas.node.resources.ActionFacet;
 import org.opentravel.schemas.node.resources.ActionNode;
@@ -36,6 +36,7 @@ import org.opentravel.schemas.node.resources.ParamGroup;
 import org.opentravel.schemas.node.resources.ParentRef;
 import org.opentravel.schemas.node.resources.ResourceBuilder;
 import org.opentravel.schemas.node.resources.ResourceNode;
+import org.opentravel.schemas.node.typeProviders.facetOwners.BusinessObjectNode;
 import org.opentravel.schemas.properties.Images;
 import org.opentravel.schemas.stl2developer.DialogUserNotifier;
 import org.opentravel.schemas.stl2developer.OtmRegistry;
@@ -55,8 +56,9 @@ public class ResourceCommandHandler extends OtmAbstractHandler {
 	public static String COMMAND_ID = "org.opentravel.schemas.commands.newResource";
 
 	// Enumeration of the types of command actions nodes can handle.
+	// Used in plugin.xml for commandId
 	public static enum CommandType {
-		DELETE, PARENTREF, ACTION, ACTIONFACET, PARAMGROUP, RESOURCE, NONE, ACTIONRESPONSE, ACTIONREQUEST
+		DELETE, PARENTREF, ACTION, ACTIONFACET, PARAMGROUP, RESOURCE, NONE, ACTIONRESPONSE, ACTIONREQUEST, WIZARD
 	}
 
 	private Node selectedNode; // The user selected node.
@@ -72,9 +74,11 @@ public class ResourceCommandHandler extends OtmAbstractHandler {
 		// IWorkbenchWindow ww;
 		// ww = UIPlugin.getDefault().getWorkbench().getActiveWorkbenchWindow();
 		// IWorkbenchPage wp = ww.getActivePage();
-		Node n = mc.getGloballySelectNode();
+		// Node n = getFirstSelected();
 		Node rn = mc.getCurrentNode_ResourceView();
-		return true;
+		if (!rn.isEditable())
+			mc.postStatus("Resource must be in latest version of a library chain to be edited.");
+		return rn.isEditable();
 	}
 
 	// Used by Actions
@@ -89,7 +93,7 @@ public class ResourceCommandHandler extends OtmAbstractHandler {
 	// Entry point from command execution
 	@Override
 	public Object execute(ExecutionEvent exEvent) throws ExecutionException {
-		String filePathParam = exEvent.getParameter("org.opentravel.schemas.stl2Developer.newAction");
+		// String filePathParam = exEvent.getParameter("org.opentravel.schemas.stl2Developer.newAction");
 		// LOGGER.debug(filePathParam);
 
 		view = OtmRegistry.getResourceView();
@@ -120,6 +124,8 @@ public class ResourceCommandHandler extends OtmAbstractHandler {
 				cmdType = CommandType.PARENTREF;
 			else if (cmdId.endsWith(CommandType.DELETE.toString()))
 				cmdType = CommandType.DELETE;
+			else if (cmdId.endsWith(CommandType.WIZARD.toString()))
+				cmdType = CommandType.WIZARD;
 		return cmdType;
 	}
 
@@ -130,10 +136,12 @@ public class ResourceCommandHandler extends OtmAbstractHandler {
 		if (mc.getCurrentNode_NavigatorView() instanceof BusinessObjectNode)
 			predicate = (BusinessObjectNode) mc.getCurrentNode_NavigatorView();
 
-		if (view != null)
-			selectedNode = (Node) view.getCurrentNode();
-		else
-			selectedNode = mc.getCurrentNode_NavigatorView();
+		selectedNode = getFirstSelected();
+		if (selectedNode == null)
+			if (view != null)
+				selectedNode = (Node) view.getCurrentNode();
+			else
+				selectedNode = mc.getCurrentNode_NavigatorView();
 	}
 
 	/**
@@ -145,8 +153,9 @@ public class ResourceCommandHandler extends OtmAbstractHandler {
 			// If it is in a chain, get the head of the chain
 			if (effectiveLib.getChain() != null && !effectiveLib.isInHead())
 				effectiveLib = effectiveLib.getChain().getHead();
+			return effectiveLib.isEditable() ? effectiveLib : null;
 		}
-		return effectiveLib.isEditable() ? effectiveLib : null;
+		return null;
 	}
 
 	private void runCommand(CommandType type) {
@@ -162,7 +171,7 @@ public class ResourceCommandHandler extends OtmAbstractHandler {
 
 		switch (type) {
 		case DELETE:
-			Node owner = selectedNode.getOwningComponent();
+			Node owner = (Node) selectedNode.getOwningComponent();
 			List<Node> nodes = view.getSelectedNodes();
 			new DeleteNodesHandler().deleteNodes(nodes);
 
@@ -182,9 +191,19 @@ public class ResourceCommandHandler extends OtmAbstractHandler {
 				// run wizard
 				predicate = getBusinessObject();
 				if (predicate == null)
-					return;
+					if (!DialogUserNotifier.openQuestion("New Resource",
+							"Do you want to create an abstract resource? If yes, you will be asked to select a base response object for the error response action facet."))
+						return;
 				ResourceNode newR = new ResourceNode(effectiveLib, predicate); // create named empty resource
-				new ResourceBuilder().build(newR, predicate);
+				if (predicate != null)
+					new ResourceBuilder().build(newR, predicate);
+				else {
+					// Build an abstract resource
+					ActionFacet af = new ResourceBuilder().buildAbstract(newR, true);
+					final TypeSelectionWizard wizard = new TypeSelectionWizard(af);
+					if (wizard.run(OtmRegistry.getActiveShell()))
+						af.setBasePayload(wizard.getSelection());
+				}
 
 				if (view != null) {
 					view.select(newR);
@@ -249,22 +268,51 @@ public class ResourceCommandHandler extends OtmAbstractHandler {
 			} else
 				postWarning(type);
 			break;
+		case WIZARD:
+			baseResponseWizard(selectedNode);
+			view.refresh();
+			break;
 		case NONE:
 		default:
 			DialogUserNotifier.openWarning("Not Supported", "Not supported for this object type.");
 		}
 	}
 
-	private void postWarning(CommandType type, Node n) {
-		if (n.getLibrary() == null)
-			LOGGER.debug(n + " has no library.");
-		postWarning(type);
+	private void baseResponseWizard(Node n) {
+		ResourceNode rn = null;
+		ActionFacet af = null;
+		if (n instanceof ResourceNode)
+			rn = (ResourceNode) n;
+		else if (n instanceof ResourceMemberInterface)
+			rn = ((ResourceMemberInterface) n).getOwningResource();
+
+		if (rn == null) {
+			DialogUserNotifier.openWarning("Not Supported",
+					"Wizard does not support objects of type " + n.getClass().getSimpleName());
+			return;
+		}
+
+		// Get the first action facet for the wizard
+		if (!rn.getActionFacets().isEmpty())
+			af = rn.getActionFacets().get(0);
+
+		// Run selection wizard to get base response object
+		if (af != null && OtmRegistry.getActiveShell() != null) {
+			final TypeSelectionWizard wizard = new TypeSelectionWizard(af);
+			if (wizard.run(OtmRegistry.getActiveShell()))
+				rn.setAllActionFacets(wizard.getSelection());
+		} else
+			DialogUserNotifier.openWarning("Not Supported", "There are no action facets for the wizard to work with.");
 	}
 
 	private void postWarning(CommandType type) {
 		switch (type) {
 		case DELETE:
 			DialogUserNotifier.openWarning("Can Not Delete", "The state of this library does not allow deletion.");
+			break;
+		case RESOURCE:
+			DialogUserNotifier.openWarning("Can Not Create Resource",
+					"The state of this library does not allow adding resources.");
 			break;
 		default:
 			DialogUserNotifier.openWarning("Missing Subject", "Can not find the parent for the new item.");

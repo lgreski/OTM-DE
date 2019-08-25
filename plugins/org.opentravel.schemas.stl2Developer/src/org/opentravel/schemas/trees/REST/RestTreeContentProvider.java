@@ -38,9 +38,9 @@ public class RestTreeContentProvider implements ITreeContentProvider {
 
 	@Override
 	public Object[] getElements(final Object element) {
-		List<Node> kids = new ArrayList<Node>();
+		List<Node> kids = new ArrayList<>();
 		if (element instanceof LibraryChainNode)
-			kids = ((LibraryChainNode) element).getResourceAggregate().getTreeChildren(false);
+			kids = ((LibraryChainNode) element).getResourceAggregate().getChildrenHandler().getTreeChildren(false);
 		else if (element instanceof NavNode && ((NavNode) element).isResourceRoot())
 			kids = ((Node) element).getChildren();
 		return kids.toArray();
@@ -58,7 +58,7 @@ public class RestTreeContentProvider implements ITreeContentProvider {
 		if (node instanceof ResourceNode)
 			navChildren = ((ResourceNode) node).getTreeChildren(); // no nav children for navigator menu
 		else if (node instanceof ResourceMemberInterface)
-			navChildren = ((Node) node).getNavChildren(true);
+			navChildren = node.getNavChildren(true);
 
 		return navChildren != null ? navChildren.toArray() : Collections.EMPTY_LIST.toArray();
 	}
@@ -72,9 +72,9 @@ public class RestTreeContentProvider implements ITreeContentProvider {
 			node = (Node) element;
 
 		if (node instanceof ResourceNode)
-			return !((Node) node).getChildren().isEmpty();
+			return !node.getChildren().isEmpty();
 		if (node instanceof ResourceMemberInterface)
-			return !((Node) node).getNavChildren(true).isEmpty();
+			return !node.getNavChildren(true).isEmpty();
 		return false;
 	}
 
@@ -84,7 +84,7 @@ public class RestTreeContentProvider implements ITreeContentProvider {
 		if (element instanceof VersionNode)
 			node = ((VersionNode) element).get();
 		if (node instanceof ResourceMemberInterface)
-			return ((Node) node).getParent();
+			return node.getParent();
 		return null;
 	}
 

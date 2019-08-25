@@ -24,6 +24,7 @@ import java.util.Map;
 import org.eclipse.swt.graphics.Image;
 import org.eclipse.ui.dialogs.PatternFilter;
 import org.opentravel.ns.ota2.repositoryinfo_v01_00.RepositoryPermission;
+import org.opentravel.schemacompiler.model.TLModelElement;
 import org.opentravel.schemacompiler.repository.RemoteRepository;
 import org.opentravel.schemacompiler.repository.Repository;
 import org.opentravel.schemacompiler.repository.RepositoryException;
@@ -117,11 +118,6 @@ public abstract class RepositoryNode extends Node implements Comparable<Reposito
 		return kids;
 	}
 
-	@Override
-	public void setKidsLibrary() {
-		// do nothing
-	}
-
 	/**
 	 * @return list of latest repository versions for passed namespace
 	 */
@@ -194,7 +190,8 @@ public abstract class RepositoryNode extends Node implements Comparable<Reposito
 
 	@Override
 	public int compareTo(RepositoryNode r2) {
-		return 0;
+		return this.getName().compareTo(r2.getName());
+		// return 0;
 	}
 
 	/**
@@ -264,6 +261,16 @@ public abstract class RepositoryNode extends Node implements Comparable<Reposito
 					ret = ret || repository.getId().equals(repository2.getId());
 			}
 			return ret;
+		}
+
+		/*
+		 * (non-Javadoc)
+		 * 
+		 * @see org.opentravel.schemas.node.Node#getTLModelObject()
+		 */
+		@Override
+		public TLModelElement getTLModelObject() {
+			return null;
 		}
 
 	}
@@ -338,6 +345,17 @@ public abstract class RepositoryNode extends Node implements Comparable<Reposito
 			} else if (!getRepository().equals(other.getRepository()))
 				return false;
 			return true;
+		}
+
+		/*
+		 * (non-Javadoc)
+		 * 
+		 * @see org.opentravel.schemas.node.Node#getTLModelObject()
+		 */
+		@Override
+		public TLModelElement getTLModelObject() {
+			// TODO Auto-generated method stub
+			return null;
 		}
 
 	}
@@ -507,6 +525,17 @@ public abstract class RepositoryNode extends Node implements Comparable<Reposito
 			}
 		}
 
+		/*
+		 * (non-Javadoc)
+		 * 
+		 * @see org.opentravel.schemas.node.Node#getTLModelObject()
+		 */
+		@Override
+		public TLModelElement getTLModelObject() {
+			// TODO Auto-generated method stub
+			return null;
+		}
+
 	}
 
 	/**
@@ -647,6 +676,17 @@ public abstract class RepositoryNode extends Node implements Comparable<Reposito
 		public void refresh() throws RepositoryException {
 			((RepositoryNode) getParent()).refresh();
 		}
+
+		/*
+		 * (non-Javadoc)
+		 * 
+		 * @see org.opentravel.schemas.node.Node#getTLModelObject()
+		 */
+		@Override
+		public TLModelElement getTLModelObject() {
+			// TODO Auto-generated method stub
+			return null;
+		}
 	}
 
 	/**
@@ -696,15 +736,36 @@ public abstract class RepositoryNode extends Node implements Comparable<Reposito
 			if (r2 instanceof RepositoryItemNode) {
 				Version v1 = new Version(this.ri.getVersion());
 				Version v2 = new Version(((RepositoryItemNode) r2).ri.getVersion());
+				String n1 = ri.getLibraryName();
+				String n2 = ((RepositoryItemNode) r2).ri.getLibraryName();
+
+				int nameCompare = n1.compareTo(n2);
+				// int nameCompare = super.compareTo(r2);
 				int versionCompare = v2.compareTo(v1);
-				if (versionCompare == 0) {
-					// compare by name
-					return super.compareTo(r2);
-				} else {
+				if (nameCompare == 0)
 					return versionCompare;
-				}
+				else
+					return nameCompare;
+
+				// if (versionCompare == 0) {
+				// // compare by name
+				// return super.compareTo(r2);
+				// } else {
+				// return versionCompare;
+				// }
 			}
 			return super.compareTo(r2);
+		}
+
+		/*
+		 * (non-Javadoc)
+		 * 
+		 * @see org.opentravel.schemas.node.Node#getTLModelObject()
+		 */
+		@Override
+		public TLModelElement getTLModelObject() {
+			// TODO Auto-generated method stub
+			return null;
 		}
 
 	}

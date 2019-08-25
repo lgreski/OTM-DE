@@ -25,7 +25,7 @@ import java.util.Set;
 import org.eclipse.ui.views.properties.IPropertyDescriptor;
 import org.eclipse.ui.views.properties.PropertyDescriptor;
 import org.opentravel.schemacompiler.repository.RepositoryItemCommit;
-import org.opentravel.schemas.node.NamespaceHandler;
+import org.opentravel.schemas.node.handlers.NamespaceHandler;
 import org.opentravel.schemas.node.libraries.LibraryNode;
 import org.opentravel.schemas.preferences.GeneralPreferencePage;
 import org.opentravel.schemas.properties.Messages;
@@ -221,115 +221,6 @@ public class LibraryPropertySource extends AbstractPropertySource<LibraryNode> {
 
 		};
 	}
-
-	// private PropertySetter createFinalize() {
-	// return new EnumPropertySetter(LibProperties.FINALIZE) {
-	//
-	// @Override
-	// public void setValue(Object value) {
-	// OtmRegistry.getMainController().getRepositoryController().markFinal(source);
-	// }
-	//
-	// @Override
-	// public Object getValue() {
-	// return getDisplayName();
-	// }
-	//
-	// @Override
-	// public PropertyDescriptor createPropertyDescriptor() {
-	// ButtonPropertyDescriptor pd = new ButtonPropertyDescriptor(getId(), "");
-	// if (!GeneralPreferencePage.areNamespacesManaged() || !TLLibraryStatus.DRAFT.equals(source.getStatus())) {
-	// pd.setReadonly(true);
-	// }
-	// pd.setCategory(getCategoryName());
-	// pd.setDescription(getTooltip());
-	// return pd;
-	// }
-	//
-	// };
-	// }
-
-	// private PropertySetter createCommit() {
-	// return new EnumPropertySetter(LibProperties.COMMIT) {
-	//
-	// @Override
-	// public void setValue(Object value) {
-	// new CommitLibraryAction().run();
-	// }
-	//
-	// @Override
-	// public Object getValue() {
-	// return getDisplayName();
-	// }
-	//
-	// @Override
-	// public PropertyDescriptor createPropertyDescriptor() {
-	// ButtonPropertyDescriptor pd = new ButtonPropertyDescriptor(getId(), "");
-	// pd.setCategory(getCategoryName());
-	// pd.setDescription(getTooltip());
-	// return pd;
-	// }
-	//
-	// };
-	// }
-
-	// private PropertySetter createLock() {
-	// return new EnumPropertySetter(LibProperties.LOCK) {
-	//
-	// @Override
-	// public void setValue(Object value) {
-	// OtmRegistry.getMainController().getRepositoryController().lock(source);
-	// }
-	//
-	// @Override
-	// public Object getValue() {
-	// return getDisplayName();
-	// }
-	//
-	// @Override
-	// public PropertyDescriptor createPropertyDescriptor() {
-	// ButtonPropertyDescriptor pd = new ButtonPropertyDescriptor(getId(), "");
-	// pd.setCategory(getCategoryName());
-	// pd.setDescription(getTooltip());
-	// pd.setReadonly(true);
-	// if (NodeEditStatus.MANAGED_READONLY.equals(source.getEditStatus())) {
-	// pd.setReadonly(false);
-	// }
-	// return pd;
-	// }
-	//
-	// };
-	// }
-
-	// private PropertySetter createManage() {
-	// return new EnumPropertySetter(LibProperties.MANAGE) {
-	//
-	// @Override
-	// public void setValue(Object value) {
-	// }
-	//
-	// @Override
-	// public Object getValue() {
-	// return getDisplayName();
-	// }
-	//
-	// @Override
-	// public PropertyDescriptor createPropertyDescriptor() {
-	// List<Action> actions = NavigatorMenus.createRepositoryActionsForLibraries(source);
-	// ButtonPropertyDescriptor pd = new ButtonPropertyDescriptor(getId(), "");
-	// if (actions.isEmpty()) {
-	// pd.setReadonly(true);
-	// }
-	// for (Action a : actions) {
-	// pd.add(a);
-	// }
-	// pd.setCategory(getCategoryName());
-	// pd.setDescription(getTooltip());
-	// return pd;
-	// }
-	//
-	// };
-	// }
 
 	private PropertySetter createMarkDefault() {
 		return new EnumPropertySetter(LibProperties.DEFAULT) {
@@ -530,7 +421,7 @@ public class LibraryPropertySource extends AbstractPropertySource<LibraryNode> {
 			node.setNamespace(ns);
 			OtmRegistry.getMainController().getLibraryController().updateLibraryStatus();
 			OtmRegistry.getMainController().refresh(node); // select the current node
-			LOGGER.debug("Changed " + node + " namespace to " + ns);
+			// LOGGER.debug("Changed " + node + " namespace to " + ns);
 		}
 	}
 

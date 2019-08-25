@@ -64,6 +64,7 @@ import org.opentravel.schemas.actions.UnlockLibraryAction;
 import org.opentravel.schemas.actions.VersionAction;
 import org.opentravel.schemas.actions.VersionAction.VersionType;
 import org.opentravel.schemas.commands.AddNodeHandler2;
+import org.opentravel.schemas.commands.ChangeTypeProviderLibraryHandler;
 import org.opentravel.schemas.commands.CloseLibrariesHandler;
 import org.opentravel.schemas.commands.CloseProjectHandler;
 import org.opentravel.schemas.commands.CompileHandler;
@@ -76,32 +77,32 @@ import org.opentravel.schemas.commands.SaveLibraryHandler;
 import org.opentravel.schemas.commands.ValidateHandler;
 import org.opentravel.schemas.commands.VersionUpdateHandler;
 import org.opentravel.schemas.controllers.RepositoryController;
-import org.opentravel.schemas.node.AliasNode;
-import org.opentravel.schemas.node.BusinessObjectNode;
-import org.opentravel.schemas.node.ChoiceObjectNode;
 import org.opentravel.schemas.node.ComponentNode;
-import org.opentravel.schemas.node.CoreObjectNode;
-import org.opentravel.schemas.node.ExtensionPointNode;
 import org.opentravel.schemas.node.NavNode;
 import org.opentravel.schemas.node.Node;
 import org.opentravel.schemas.node.ProjectNode;
 import org.opentravel.schemas.node.ServiceNode;
-import org.opentravel.schemas.node.SimpleComponentNode;
-import org.opentravel.schemas.node.VWA_Node;
 import org.opentravel.schemas.node.VersionNode;
-import org.opentravel.schemas.node.facets.ContextualFacetNode;
-import org.opentravel.schemas.node.facets.ContributedFacetNode;
-import org.opentravel.schemas.node.facets.FacetNode;
-import org.opentravel.schemas.node.facets.OperationNode;
 import org.opentravel.schemas.node.interfaces.Enumeration;
 import org.opentravel.schemas.node.libraries.LibraryChainNode;
 import org.opentravel.schemas.node.libraries.LibraryNavNode;
 import org.opentravel.schemas.node.libraries.LibraryNode;
+import org.opentravel.schemas.node.objectMembers.ContributedFacetNode;
+import org.opentravel.schemas.node.objectMembers.ExtensionPointNode;
+import org.opentravel.schemas.node.objectMembers.FacetOMNode;
+import org.opentravel.schemas.node.objectMembers.OperationNode;
 import org.opentravel.schemas.node.properties.EnumLiteralNode;
 import org.opentravel.schemas.node.properties.PropertyNode;
 import org.opentravel.schemas.node.properties.RoleNode;
-import org.opentravel.schemas.node.properties.SimpleAttributeNode;
+import org.opentravel.schemas.node.properties.SimpleAttributeFacadeNode;
 import org.opentravel.schemas.node.resources.ResourceNode;
+import org.opentravel.schemas.node.typeProviders.AliasNode;
+import org.opentravel.schemas.node.typeProviders.ChoiceObjectNode;
+import org.opentravel.schemas.node.typeProviders.ContextualFacetNode;
+import org.opentravel.schemas.node.typeProviders.SimpleTypeNode;
+import org.opentravel.schemas.node.typeProviders.VWA_Node;
+import org.opentravel.schemas.node.typeProviders.facetOwners.BusinessObjectNode;
+import org.opentravel.schemas.node.typeProviders.facetOwners.CoreObjectNode;
 import org.opentravel.schemas.properties.DefaultStringProperties;
 import org.opentravel.schemas.properties.ExternalizedStringProperties;
 import org.opentravel.schemas.properties.Messages;
@@ -178,7 +179,8 @@ public class NavigatorMenus extends TreeViewer {
 		final MenuManager versionMenu = new MenuManager("Version...", "VersionMenuID");
 
 		// Define the Actions
-		final Action newLibraryAction = new NewLibraryAction(mainWindow, new ExternalizedStringProperties("action.new"));
+		final Action newLibraryAction = new NewLibraryAction(mainWindow,
+				new ExternalizedStringProperties("action.new"));
 		final Action openLibraryAction = new OpenLibraryAction();
 		final Action commitLibraryAction = new CommitLibraryAction();
 		// final Action finalizeLibraryAction = new FinalizeLibraryAction();
@@ -191,8 +193,8 @@ public class NavigatorMenus extends TreeViewer {
 
 		final Action addCrudqOperationsAction = new AddCRUDQOperationsAction(mainWindow,
 				new ExternalizedStringProperties("action.addCRUDQOperations"));
-		final Action cloneObjectAction = new CopyNodeAction(mainWindow, new ExternalizedStringProperties(
-				"action.cloneObject"));
+		final Action cloneObjectAction = new CopyNodeAction(mainWindow,
+				new ExternalizedStringProperties("action.cloneObject"));
 		// This is the go-to approach - let the actions have default properties
 		final Action changeObjectAction = new ChangeAction(mainWindow);
 		final Action addAliasAction = new AddAliasAction(mainWindow);
@@ -213,10 +215,13 @@ public class NavigatorMenus extends TreeViewer {
 		final IContributionItem openProjectCommand = RCPUtils.createCommandContributionItem(site,
 				OpenProjectHandler.COMMAND_ID, null, null, null);
 		final Action newProjectAction = new NewProjectAction();
-		final IContributionItem compileCommand = RCPUtils.createCommandContributionItem(site,
-				CompileHandler.COMMAND_ID, null, null, null);
+		final IContributionItem compileCommand = RCPUtils.createCommandContributionItem(site, CompileHandler.COMMAND_ID,
+				null, null, null);
+
 		final IContributionItem versionUpdateCommand = RCPUtils.createCommandContributionItem(site,
 				VersionUpdateHandler.COMMAND_ID, null, null, null);
+		final IContributionItem changeProviderLibraryCommand = RCPUtils.createCommandContributionItem(site,
+				ChangeTypeProviderLibraryHandler.COMMAND_ID, null, null, null);
 
 		final IContributionItem saveAllLibrariesCommand = RCPUtils.createCommandContributionItem(site,
 				SaveLibrariesHandler.COMMAND_ID, null, null, SaveLibrariesHandler.getIcon());
@@ -270,6 +275,7 @@ public class NavigatorMenus extends TreeViewer {
 				libraryMenu.add(closeLibrariesCommand);
 
 				versionUpdateMenu.add(versionUpdateCommand);
+				versionUpdateMenu.add(changeProviderLibraryCommand);
 
 				projectMenu.removeAll();
 				projectMenu.add(closeProjectCommand);
@@ -394,7 +400,7 @@ public class NavigatorMenus extends TreeViewer {
 
 					// Set up cascade menus
 					versionMenu.removeAll();
-					if (node.getLibrary() != null && node.getLibrary().isManaged())
+					if (node != null && node.getLibrary() != null && node.getLibrary().isManaged())
 						versionMenu.setVisible(true);
 					for (final Action action : createVersionActions(node))
 						versionMenu.add(action);
@@ -418,6 +424,7 @@ public class NavigatorMenus extends TreeViewer {
 						manager.add(whereUsedMenu);
 					} else if (node instanceof LibraryProviderNode) {
 						manager.add(versionUpdateCommand);
+						manager.add(changeProviderLibraryCommand);
 					} else if (node instanceof ProjectNode || node instanceof LibraryNode
 							|| node instanceof LibraryNavNode || node instanceof LibraryChainNode
 							|| node instanceof NavNode) {
@@ -427,52 +434,55 @@ public class NavigatorMenus extends TreeViewer {
 						manager.add(libraryMenu);
 						manager.add(projectMenu);
 					} else if (node instanceof ComponentNode) {
-						if (node.isInModel()) {
-							if (!node.isEditable()) {
-								manager.add(basicObjectMenu);
-							} else if (node instanceof ServiceNode) {
-								manager.add(serviceObjectMenu);
-							} else if (node instanceof OperationNode) {
-								manager.add(operationObjectMenu);
-							} else if (node instanceof ResourceNode) {
-								manager.add(deleteMoveMenu);
-								//
-							} else if (node instanceof BusinessObjectNode) {
-								manager.add(componentMenu);
-							} else if (node instanceof ChoiceObjectNode) {
-								manager.add(componentMenu);
-							} else if (node instanceof CoreObjectNode) {
-								manager.add(componentMenu);
-							} else if (node instanceof VWA_Node) {
-								manager.add(componentMenu);
-							} else if (node instanceof Enumeration) {
-								manager.add(componentMenu);
-							} else if (node instanceof AliasNode) {
-								manager.add(componentMenu);
-							} else if (node instanceof ContextualFacetNode && !(node instanceof ContributedFacetNode)) {
-								manager.add(componentMenu);
-								//
-							} else if (node instanceof FacetNode) {
-								manager.add(facetMenu);
-							} else if (node.isFacetAlias()) {
-								manager.add(facetMenu);
-							} else if (node instanceof ExtensionPointNode) {
-								manager.add(xpFacetObjectMenu);
-							} else if (node instanceof SimpleComponentNode) {
-								manager.add(simpleObjectMenu);
-							} else if (node instanceof SimpleAttributeNode) {
-							} else if (node instanceof RoleNode) {
-								manager.add(roleObjectMenu);
-							} else if (node instanceof EnumLiteralNode) {
-								manager.add(enumObjectMenu);
-							} else if (node instanceof PropertyNode) {
-								manager.add(propertyMenu);
-							}
-
-							else if (node.isImportable()) {
-								manager.add(copyMenu);
-							}
+						// if (node.isInModel()) {
+						if (!node.isEditable()) {
+							manager.add(basicObjectMenu);
+						} else if (node instanceof ServiceNode) {
+							manager.add(serviceObjectMenu);
+						} else if (node instanceof OperationNode) {
+							manager.add(operationObjectMenu);
+						} else if (node instanceof ResourceNode) {
+							manager.add(deleteMoveMenu);
+							//
+						} else if (node instanceof BusinessObjectNode) {
+							manager.add(componentMenu);
+						} else if (node instanceof ChoiceObjectNode) {
+							manager.add(componentMenu);
+						} else if (node instanceof CoreObjectNode) {
+							manager.add(componentMenu);
+						} else if (node instanceof VWA_Node) {
+							manager.add(componentMenu);
+						} else if (node instanceof Enumeration) {
+							manager.add(componentMenu);
+						} else if (node instanceof AliasNode) {
+							if (!((AliasNode) node).isFacetAlias())
+								manager.add(componentMenu); // Only allow root alias to be changed
+						} else if (node instanceof ContextualFacetNode && !(node instanceof ContributedFacetNode)) {
+							manager.add(componentMenu);
+							//
+						} else if (node instanceof FacetOMNode) {
+							manager.add(facetMenu);
+							// } else if (node.isFacetAlias()) {
+							// assert false;
+							// manager.add(facetMenu); // Reached? should match aliasNode
+						} else if (node instanceof ExtensionPointNode) {
+							manager.add(xpFacetObjectMenu);
+						} else if (node instanceof SimpleTypeNode) {
+							manager.add(simpleObjectMenu);
+						} else if (node instanceof SimpleAttributeFacadeNode) {
+						} else if (node instanceof RoleNode) {
+							manager.add(roleObjectMenu);
+						} else if (node instanceof EnumLiteralNode) {
+							manager.add(enumObjectMenu);
+						} else if (node instanceof PropertyNode) {
+							manager.add(propertyMenu);
 						}
+
+						else if (node.isImportable()) {
+							// FIXME - this may need to be changed to test if has XsdObjectHandler
+							manager.add(copyMenu);
+						}
+						// }
 						manager.add(libraryMenu);
 						manager.add(projectMenu);
 					}
@@ -481,30 +491,31 @@ public class NavigatorMenus extends TreeViewer {
 			}
 
 			private List<Action> createImportActionsForLibraries(final Node context) {
-				final List<Action> libActions = new ArrayList<Action>();
+				final List<Action> libActions = new ArrayList<>();
 				for (final LibraryNode ln : getListOfLibraries(context)) {
 					final StringProperties sp = new DefaultStringProperties();
-					sp.set(PropertyType.TEXT, ln.getName());
+					sp.set(PropertyType.TEXT, ln.getNameWithPrefix());
 					libActions.add(new ImportObjectToLibraryAction(mainWindow, sp, ln));
 				}
 				return libActions;
 			}
 
-			private List<Action> createMoveActionsForLibraries(final Node menuContext) {
-				final List<Action> libActions = new ArrayList<Action>();
-				if (menuContext.getLibrary() == null || !menuContext.getLibrary().isMoveable())
+			private List<Action> createMoveActionsForLibraries(final Node n) {
+				final List<Action> libActions = new ArrayList<>();
+				// New content only, do not allow move minor versions of objects
+				if (!n.isEditable_newToChain() || !n.getLibrary().isMoveable())
 					return libActions; // No moves for xsd/builtin library members
 
-				for (final LibraryNode ln : getListOfLibraries(menuContext)) {
+				for (final LibraryNode ln : getListOfLibraries(n)) {
 					final StringProperties sp = new DefaultStringProperties();
-					sp.set(PropertyType.TEXT, ln.getName());
+					sp.set(PropertyType.TEXT, ln.getNameWithPrefix());
 					libActions.add(new MoveObjectToLibraryAction(sp, ln));
 				}
 				return libActions;
 			}
 
 			private List<Action> createVersionActions(Node node) {
-				final List<Action> actions = new ArrayList<Action>();
+				final List<Action> actions = new ArrayList<>();
 
 				actions.add(new VersionAction(VersionType.MAJOR));
 				actions.add(new VersionAction(VersionType.MINOR));
@@ -516,7 +527,7 @@ public class NavigatorMenus extends TreeViewer {
 			}
 
 			private List<LibraryNode> getListOfLibraries(final Node node) {
-				final List<LibraryNode> libs = new ArrayList<LibraryNode>();
+				final List<LibraryNode> libs = new ArrayList<>();
 				for (final LibraryNode ln : Node.getAllUserLibraries()) {
 					if (ln.getChain() != null) {
 						// add if it is not in the node's chain and the head of the chain
@@ -555,7 +566,7 @@ public class NavigatorMenus extends TreeViewer {
 	}
 
 	public static List<Action> createRepositoryActionsForLibraries(final Node lib) {
-		final List<Action> repoActions = new ArrayList<Action>();
+		final List<Action> repoActions = new ArrayList<>();
 		if (lib.getLibrary() == null || !lib.getLibrary().isEditable())
 			return repoActions; // No actions available
 

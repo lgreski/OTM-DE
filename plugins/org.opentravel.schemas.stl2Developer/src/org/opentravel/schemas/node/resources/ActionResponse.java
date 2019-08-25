@@ -20,7 +20,6 @@ import java.util.List;
 
 import org.eclipse.swt.graphics.Image;
 import org.opentravel.schemacompiler.model.TLAction;
-import org.opentravel.schemacompiler.model.TLActionFacet;
 import org.opentravel.schemacompiler.model.TLActionResponse;
 import org.opentravel.schemacompiler.model.TLMimeType;
 import org.opentravel.schemas.node.Node;
@@ -76,9 +75,10 @@ public class ActionResponse extends ResourceBase<TLActionResponse> implements Re
 	public ActionResponse(ActionNode parent) {
 		super(new TLActionResponse(), parent);
 
-		((TLAction) parent.getTLModelObject()).addResponse(tlObj);
+		parent.getTLModelObject().addResponse(tlObj);
 	}
 
+	@Override
 	public void addChildren() {
 	}
 
@@ -103,6 +103,17 @@ public class ActionResponse extends ResourceBase<TLActionResponse> implements Re
 		return "Action Response";
 	}
 
+	@Override
+	public String getDecoration() {
+		String decoration = "  (";
+		decoration += " Returns ";
+		if (getPayload() == null)
+			decoration += "Status Only";
+		else
+			decoration += getPayloadName();
+		return decoration + ")";
+	}
+
 	public String getPayloadName() {
 		if (tlObj.getPayloadType() == null)
 			tlObj.setPayloadTypeName(null); // tl model doesn't always do this
@@ -111,7 +122,7 @@ public class ActionResponse extends ResourceBase<TLActionResponse> implements Re
 
 	@Override
 	public List<ResourceField> getFields() {
-		List<ResourceField> fields = new ArrayList<ResourceField>();
+		List<ResourceField> fields = new ArrayList<>();
 
 		// Payload type = an action facet
 		new ResourceField(fields, getPayloadName(), "rest.ActionResponse.fields.payload", ResourceFieldType.Enum,
@@ -152,7 +163,7 @@ public class ActionResponse extends ResourceBase<TLActionResponse> implements Re
 	}
 
 	public Node getPayload() {
-		return getNode(((TLActionFacet) tlObj.getPayloadType()).getListeners());
+		return tlObj.getPayloadType() != null ? getNode(tlObj.getPayloadType().getListeners()) : null;
 	}
 
 	@Override
@@ -234,9 +245,9 @@ public class ActionResponse extends ResourceBase<TLActionResponse> implements Re
 		// LOGGER.debug("Set Mime types to: " + tlObj.getMimeTypes());
 	}
 
-	private void setStatusCode(String value) {
+	protected void setStatusCode(String value) {
 		Integer selection = RestStatusCodes.valueOf(value).value();
-		List<Integer> codes = new ArrayList<Integer>(tlObj.getStatusCodes());
+		List<Integer> codes = new ArrayList<>(tlObj.getStatusCodes());
 		if (codes.contains(selection))
 			codes.remove(selection);
 		else
@@ -260,7 +271,7 @@ public class ActionResponse extends ResourceBase<TLActionResponse> implements Re
 	}
 
 	protected List<Node> getPossiblePayloads() {
-		List<Node> nodes = new ArrayList<Node>();
+		List<Node> nodes = new ArrayList<>();
 		for (ActionFacet af : getOwningComponent().getActionFacets())
 			nodes.add(af);
 		return nodes;

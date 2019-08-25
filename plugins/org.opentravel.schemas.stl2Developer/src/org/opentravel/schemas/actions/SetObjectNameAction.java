@@ -18,7 +18,6 @@ package org.opentravel.schemas.actions;
 import org.eclipse.swt.widgets.Event;
 import org.eclipse.swt.widgets.Text;
 import org.opentravel.schemas.node.Node;
-import org.opentravel.schemas.node.NodeNameUtils;
 import org.opentravel.schemas.properties.ExternalizedStringProperties;
 import org.opentravel.schemas.properties.StringProperties;
 import org.opentravel.schemas.stl2developer.MainWindow;
@@ -48,11 +47,6 @@ public class SetObjectNameAction extends OtmAbstractAction {
 		super(mainWindow, props);
 	}
 
-	/*
-	 * (non-Javadoc)
-	 * 
-	 * @see org.eclipse.jface.action.Action#runWithEvent(org.eclipse.swt.widgets.Event)
-	 */
 	@Override
 	public void runWithEvent(Event event) {
 		String newName = "";
@@ -64,8 +58,7 @@ public class SetObjectNameAction extends OtmAbstractAction {
 			n = (Node) event.data;
 
 		if (n != null && !newName.isEmpty()) {
-			n.setName(newName);
-			NodeNameUtils.fixName(n);
+			n.setName(newName); // setName will assure they are correct
 			getMainController().refresh();
 			// LOGGER.debug("Changed name to " + n);
 		}

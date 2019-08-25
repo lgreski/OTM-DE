@@ -20,8 +20,6 @@ package org.opentravel.schemas.testUtils;
 
 import static org.junit.Assert.assertTrue;
 
-import java.util.List;
-
 import org.junit.Assert;
 import org.opentravel.schemacompiler.model.LibraryMember;
 import org.opentravel.schemacompiler.model.TLAttribute;
@@ -30,23 +28,16 @@ import org.opentravel.schemacompiler.model.TLFacet;
 import org.opentravel.schemacompiler.model.TLIndicator;
 import org.opentravel.schemacompiler.model.TLModelElement;
 import org.opentravel.schemacompiler.model.TLProperty;
-import org.opentravel.schemas.modelObject.EmptyMO;
-import org.opentravel.schemas.modelObject.SimpleFacetMO;
-import org.opentravel.schemas.modelObject.TLEmpty;
-import org.opentravel.schemas.modelObject.TLnSimpleAttribute;
 import org.opentravel.schemas.node.ComponentNode;
-import org.opentravel.schemas.node.ImpliedNode;
 import org.opentravel.schemas.node.ModelNode;
 import org.opentravel.schemas.node.NavNode;
 import org.opentravel.schemas.node.Node;
 import org.opentravel.schemas.node.Node.NodeVisitor;
 import org.opentravel.schemas.node.VersionNode;
-import org.opentravel.schemas.node.facets.OperationNode;
-import org.opentravel.schemas.node.facets.SimpleFacetNode;
 import org.opentravel.schemas.node.interfaces.INode;
 import org.opentravel.schemas.node.interfaces.LibraryMemberInterface;
-import org.opentravel.schemas.node.interfaces.ResourceMemberInterface;
 import org.opentravel.schemas.node.libraries.LibraryNode;
+import org.opentravel.schemas.node.typeProviders.ImpliedNode;
 import org.opentravel.schemas.types.TestTypes;
 import org.opentravel.schemas.types.TypeProvider;
 import org.slf4j.Logger;
@@ -54,21 +45,11 @@ import org.slf4j.LoggerFactory;
 
 /**
  * Primary node testers for use in other junit tests.
- * <p>
- * Usage: n.visitAllNodes(new NodeTesters().new TestNode()); <br>
- * <i>or</i><br>
- * NodeTesters nt = new NodeTesters(); <br>
- * node.visitAllNodes(nt.new TestNode()); <br>
- * <i>or</i><br>
- * TestNode tn = new NodeTesters().new TestNode(); <br>
- * tn.visitNode(node); <br>
- * ln.visitAllNodes(tn); <br>
- * <i>or</i><br>
- * n.visitAllNodes(new NodeTesters().new ValidateTLObject());
  * 
  * @author Dave Hollander
  * 
  */
+@Deprecated
 public class NodeTesters {
 	private static final Logger LOGGER = LoggerFactory.getLogger(NodeTesters.class);
 
@@ -79,12 +60,12 @@ public class NodeTesters {
 		}
 	}
 
-	public class PrintNode implements NodeVisitor {
-		@Override
-		public void visit(INode n) {
-			LOGGER.debug("Visited " + n + "\tof class \t" + n.getClass().getCanonicalName());
-		}
-	}
+	// public class PrintNode implements NodeVisitor {
+	// @Override
+	// public void visit(INode n) {
+	// LOGGER.debug("Visited " + n + "\tof class \t" + n.getClass().getCanonicalName());
+	// }
+	// }
 
 	/**
 	 * Test the type providers and assure where used and owner. Test type users and assure getType returns valid node.
@@ -144,20 +125,12 @@ public class NodeTesters {
 
 		// Check links.
 		Assert.assertFalse(n.getNodeID().isEmpty()); // used in drag-n-drop
+		if (n.getParent() == null)
+			LOGGER.debug("Null Parent Error");
 		Assert.assertNotNull(n.getParent());
-
-		if (!n.isLibraryContainer()) {
-			if (n instanceof SimpleFacetNode)
-				LOGGER.debug(n + " getting library: " + n.getLibrary());
-			Assert.assertNotNull("Missing library on " + n, n.getLibrary());
-		}
-		Assert.assertNotNull(n.getLibraries());
-		Assert.assertNotNull(n.getUserLibraries());
 
 		Assert.assertNotNull(n.getChildren());
 		Assert.assertNotNull(n.getChildren_TypeProviders());
-
-		Assert.assertNotNull(n.getModelObject());
 
 		// Version nodes
 		if (n instanceof VersionNode) {
@@ -167,28 +140,6 @@ public class NodeTesters {
 			return;
 		}
 
-		// Check children
-		if (n instanceof NavNode)
-			Assert.assertTrue(n.getModelObject() instanceof EmptyMO);
-		// Resources don't use model objects so do not check their kids
-		else if (!(n.getModelObject() instanceof EmptyMO) && !(n instanceof LibraryNode)
-				&& !(n instanceof ResourceMemberInterface) && !(n instanceof OperationNode)
-				&& !(n.getChildren().isEmpty())) {
-			if (n.getChildren().size() != n.getModelObject().getChildren().size()) {
-				List<?> kids = n.getChildren();
-				List<?> moKids = n.getModelObject().getChildren();
-				LOGGER.debug("Children sizes are not equal.");
-			}
-			// Will not be true if BO has contextual facets
-			// Assert.assertEquals(n.getChildren().size(), n.getModelObject().getChildren().size());
-		}
-
-		// Check names
-		// String name = "";
-		// if (n.getName().isEmpty()) {
-		// name = n.getName();
-		// }
-		// String foo = name;
 		if (n.getName().isEmpty())
 			LOGGER.debug("Empty Name: " + n.getName());
 		Assert.assertFalse(n.getName().isEmpty());
@@ -206,8 +157,6 @@ public class NodeTesters {
 		Assert.assertFalse(n.isDeleted());
 		Assert.assertNotNull(n.getComponentType());
 		Assert.assertFalse(n.getComponentType().isEmpty());
-		if (n.getModelObject() instanceof SimpleFacetMO)
-			Assert.assertTrue(n instanceof SimpleFacetNode);
 
 		// Check type information
 		if (n instanceof TypeProvider)
@@ -215,11 +164,7 @@ public class NodeTesters {
 
 		// is tests - make sure they do not throw exception
 		n.isEditable();
-		n.isLibraryContainer();
 		n.isNamedEntity();
-		// if (n instanceof TypeUser;
-		n.isAssignedByReference();
-		n.isLibraryContainer();
 
 	}
 
@@ -231,8 +176,7 @@ public class NodeTesters {
 				return;
 			if (n instanceof ImpliedNode)
 				return;
-			// XSD types will fail because they are not in the model until
-			// imported.
+			// XSD types will fail because they are not in the model until imported.
 			if (n.isXsdType()) {
 				return;
 			}
@@ -249,10 +193,7 @@ public class NodeTesters {
 		public void validateTL(TLModelElement tlObj, INode in) throws IllegalStateException {
 			String msg = "";
 			// LOGGER.debug("Validating tlObj " +
-			// tlObj.getValidationIdentity());
-			if (tlObj instanceof TLEmpty)
-				return;
-			if (tlObj instanceof TLnSimpleAttribute)
+			if (tlObj == null)
 				return;
 
 			if (tlObj.getValidationIdentity() == null || tlObj.getValidationIdentity().isEmpty())

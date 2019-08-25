@@ -22,10 +22,10 @@ import java.util.List;
 import java.util.Map;
 
 import org.opentravel.schemas.node.Node;
-import org.opentravel.schemas.node.facets.ContextualFacetNode;
 import org.opentravel.schemas.node.interfaces.ExtensionOwner;
 import org.opentravel.schemas.node.interfaces.WhereUsedNodeInterface;
 import org.opentravel.schemas.node.libraries.LibraryNode;
+import org.opentravel.schemas.node.typeProviders.ContextualFacetNode;
 import org.opentravel.schemas.types.TypeProvider;
 import org.opentravel.schemas.types.TypeUser;
 
@@ -53,7 +53,7 @@ public class LibraryUserNode extends WhereUsedNode<LibraryNode> implements Where
 			owner = userLibrary.getChain().getHead();
 		// this.parent = providerLibrary;
 		labelProvider = simpleLabelProvider(userLibrary.getName());
-		imageProvider = nodeImageProvider(providerLibrary.getOwningComponent());
+		imageProvider = nodeImageProvider((Node) providerLibrary.getOwningComponent());
 	}
 
 	@Override

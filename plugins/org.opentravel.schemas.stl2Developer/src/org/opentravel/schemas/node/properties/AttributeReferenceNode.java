@@ -15,17 +15,25 @@
  */
 package org.opentravel.schemas.node.properties;
 
+import javax.xml.namespace.QName;
+
 import org.eclipse.swt.graphics.Image;
+import org.opentravel.schemacompiler.codegen.util.PropertyCodegenUtils;
+import org.opentravel.schemacompiler.model.NamedEntity;
 import org.opentravel.schemacompiler.model.TLAttribute;
-import org.opentravel.schemas.modelObject.AttributeMO;
-import org.opentravel.schemas.node.BusinessObjectNode;
+import org.opentravel.schemacompiler.model.TLModelElement;
+import org.opentravel.schemacompiler.model.TLPropertyType;
 import org.opentravel.schemas.node.ComponentNodeType;
-import org.opentravel.schemas.node.CoreObjectNode;
 import org.opentravel.schemas.node.ModelNode;
 import org.opentravel.schemas.node.Node;
-import org.opentravel.schemas.node.NodeNameUtils;
+import org.opentravel.schemas.node.interfaces.FacetInterface;
 import org.opentravel.schemas.node.interfaces.INode;
+import org.opentravel.schemas.node.typeProviders.ImpliedNode;
+import org.opentravel.schemas.node.typeProviders.facetOwners.BusinessObjectNode;
+import org.opentravel.schemas.node.typeProviders.facetOwners.CoreObjectNode;
 import org.opentravel.schemas.properties.Images;
+import org.opentravel.schemas.trees.type.TypeSelectionFilter;
+import org.opentravel.schemas.trees.type.TypeTreeIdReferenceTypeOnlyFilter;
 import org.opentravel.schemas.types.TypeProvider;
 
 /**
@@ -38,18 +46,13 @@ import org.opentravel.schemas.types.TypeProvider;
  */
 public class AttributeReferenceNode extends AttributeNode {
 
-	public AttributeReferenceNode(PropertyOwnerInterface parent, String name) {
-		this(parent, name, ModelNode.getUnassignedNode());
+	// FIXME - remove name from constructors
+	public AttributeReferenceNode(FacetInterface parent) {
+		this(parent, ModelNode.getUnassignedNode());
 	}
 
-	public AttributeReferenceNode(PropertyOwnerInterface parent, String name, PropertyNodeType type) {
-		super(parent, name);
-		getTLModelObject().setReference(true);
-		setAssignedType((TypeProvider) ModelNode.getUnassignedNode());
-	}
-
-	public AttributeReferenceNode(PropertyOwnerInterface facet, String name, TypeProvider reference) {
-		super(facet, name, reference);
+	public AttributeReferenceNode(FacetInterface facet, TypeProvider reference) {
+		super(facet, "", reference);
 		getTLModelObject().setReference(true);
 		setAssignedType(reference);
 	}
@@ -61,11 +64,9 @@ public class AttributeReferenceNode extends AttributeNode {
 	 * @param parent
 	 *            can be null
 	 */
-	public AttributeReferenceNode(TLAttribute tlObj, PropertyOwnerInterface parent) {
+	public AttributeReferenceNode(TLAttribute tlObj, FacetInterface parent) {
 		super(tlObj, parent);
 		getTLModelObject().setReference(true);
-
-		assert (modelObject instanceof AttributeMO);
 	}
 
 	@Override
@@ -73,6 +74,8 @@ public class AttributeReferenceNode extends AttributeNode {
 		if (type instanceof BusinessObjectNode)
 			return true;
 		if (type instanceof CoreObjectNode)
+			return true;
+		if (type instanceof ImpliedNode)
 			return true;
 		return false;
 	}
@@ -85,7 +88,7 @@ public class AttributeReferenceNode extends AttributeNode {
 		getTLModelObject().getOwner().addAttribute(tlObj);
 		AttributeReferenceNode n = new AttributeReferenceNode(tlObj, null);
 		n.setName(type.getName());
-		getParent().linkChild(n);
+		// getParent().linkChild(n);
 		n.setDescription(type.getDescription());
 		if (type instanceof TypeProvider)
 			n.setAssignedType((TypeProvider) type);
@@ -103,8 +106,8 @@ public class AttributeReferenceNode extends AttributeNode {
 	}
 
 	@Override
-	public String getLabel() {
-		return getName();
+	public TypeSelectionFilter getTypeSelectionFilter() {
+		return new TypeTreeIdReferenceTypeOnlyFilter();
 	}
 
 	@Override
@@ -113,8 +116,35 @@ public class AttributeReferenceNode extends AttributeNode {
 	}
 
 	@Override
+	public TypeProvider setAssignedType(TypeProvider provider) {
+		boolean result = getTypeHandler().set(provider);
+		initName();
+		return result ? provider : null;
+	}
+
+	@Override
+	public boolean setAssignedTLType(TLModelElement tla) {
+		if (tla == getTLModelObject().getType())
+			return false;
+		if (canAssign(GetNode(tla)))
+			if (tla instanceof TLPropertyType)
+				getTLModelObject().setType((TLPropertyType) tla);
+		return getTLModelObject().getType() == tla;
+	}
+
+	@Override
 	public void setName(String name) {
-		getTLModelObject().setName(NodeNameUtils.fixAttributeRefName(getTypeName()));
+		// NO-OP
+	}
+
+	// If the name is not set on the tlObj, set it.
+	private void initName() {
+		QName qn = PropertyCodegenUtils.getDefaultSchemaElementName((NamedEntity) getAssignedTLObject(), true);
+		if (qn == null)
+			getTLModelObject().setName("Missing");
+		else {
+			getTLModelObject().setName(qn.getLocalPart());
+		}
 	}
 
 }

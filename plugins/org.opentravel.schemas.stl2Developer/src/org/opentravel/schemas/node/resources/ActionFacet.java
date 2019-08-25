@@ -25,13 +25,16 @@ import org.opentravel.schemacompiler.model.TLFacet;
 import org.opentravel.schemacompiler.model.TLFacetType;
 import org.opentravel.schemacompiler.model.TLLibraryMember;
 import org.opentravel.schemacompiler.model.TLReferenceType;
-import org.opentravel.schemas.node.ChoiceObjectNode;
-import org.opentravel.schemas.node.CoreObjectNode;
 import org.opentravel.schemas.node.Node;
-import org.opentravel.schemas.node.facets.FacetNode;
+import org.opentravel.schemas.node.interfaces.FacetInterface;
+import org.opentravel.schemas.node.interfaces.LibraryMemberInterface;
 import org.opentravel.schemas.node.resources.ResourceField.ResourceFieldType;
+import org.opentravel.schemas.node.typeProviders.ChoiceObjectNode;
+import org.opentravel.schemas.node.typeProviders.facetOwners.CoreObjectNode;
 import org.opentravel.schemas.properties.Images;
 import org.opentravel.schemas.properties.Messages;
+import org.opentravel.schemas.trees.type.CoreAndChoiceObjectOnlyTypeFilter;
+import org.opentravel.schemas.trees.type.TypeSelectionFilter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -123,11 +126,12 @@ public class ActionFacet extends ResourceBase<TLActionFacet> {
 			setReferenceFacetName(ResourceField.SUBGRP);
 		} else
 			for (Node fn : parent.getSubject().getChildren())
-				if (fn instanceof FacetNode)
-					if (((TLFacet) fn.getTLModelObject()).getFacetType().equals(type)) {
-						setReferenceFacetName(fn.getLabel());
-						setName(fn.getLabel());
-					}
+				if (fn instanceof FacetInterface)
+					if (fn.getTLModelObject() != null)
+						if (((TLFacet) fn.getTLModelObject()).getFacetType().equals(type)) {
+							setReferenceFacetName(type.getIdentityName());
+							setName(type.getIdentityName());
+						}
 		setReferenceType(TLReferenceType.REQUIRED.toString());
 	}
 
@@ -143,6 +147,7 @@ public class ActionFacet extends ResourceBase<TLActionFacet> {
 		return (ResourceNode) parent;
 	}
 
+	@Override
 	public void addChildren() {
 	}
 
@@ -157,12 +162,12 @@ public class ActionFacet extends ResourceBase<TLActionFacet> {
 	 * @return a list of core and choice objects
 	 */
 	public List<Node> getBasePayloads() {
-		List<Node> candidates = new ArrayList<Node>();
-		for (Node n : getLibrary().getDescendants_LibraryMembers())
+		List<Node> candidates = new ArrayList<>();
+		for (LibraryMemberInterface n : getLibrary().getDescendants_LibraryMembers())
 			if (n instanceof CoreObjectNode)
-				candidates.add(n);
+				candidates.add((Node) n);
 			else if (n instanceof ChoiceObjectNode)
-				candidates.add(n);
+				candidates.add((Node) n);
 		return candidates;
 	}
 
@@ -189,8 +194,20 @@ public class ActionFacet extends ResourceBase<TLActionFacet> {
 	}
 
 	@Override
+	public String getDecoration() {
+		String decoration = "  (";
+		decoration += getReferenceFacetName() + " : ";
+		if (tlObj.getBasePayload() != null)
+			decoration += "Wrapped ";
+		decoration += getReferenceType() + " ";
+		if (tlObj != null && tlObj.getReferenceRepeat() > 0)
+			decoration += Integer.toString(tlObj.getReferenceRepeat());
+		return decoration + ")";
+	}
+
+	@Override
 	public List<ResourceField> getFields() {
-		List<ResourceField> fields = new ArrayList<ResourceField>();
+		List<ResourceField> fields = new ArrayList<>();
 
 		// Base Payload
 		new ResourceField(fields, getBasePayloadName(), MSGKEY + ".fields.basePayload", ResourceFieldType.ObjectSelect,
@@ -241,6 +258,11 @@ public class ActionFacet extends ResourceBase<TLActionFacet> {
 	@Override
 	public String getTooltip() {
 		return Messages.getString(MSGKEY + ".tooltip");
+	}
+
+	@Override
+	public TypeSelectionFilter getTypeSelectionFilter() {
+		return new CoreAndChoiceObjectOnlyTypeFilter(null);
 	}
 
 	@Override

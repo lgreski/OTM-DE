@@ -15,6 +15,8 @@
  */
 package org.opentravel.schemas.node;
 
+import org.opentravel.schemacompiler.model.TLModelElement;
+import org.opentravel.schemacompiler.model.TLProperty;
 import org.opentravel.schemas.node.interfaces.INode;
 import org.opentravel.schemas.node.libraries.LibraryNode;
 import org.opentravel.schemas.node.properties.PropertyNodeType;
@@ -89,18 +91,18 @@ public class EditNode extends ComponentNode {
 		return useType == null ? "" : useType;
 	}
 
-	/**
-	 * Edit nodes may NOT be linked into the tree.
-	 */
-	@Override
-	public boolean linkChild(final Node child) {
-		return false;
-	}
-
-	@Override
-	public boolean linkChild(final Node child, final int index) {
-		return false;
-	}
+	// /**
+	// * Edit nodes may NOT be linked into the tree.
+	// */
+	// @Override
+	// public boolean linkChild(final Node child) {
+	// return false;
+	// }
+	//
+	// @Override
+	// public boolean linkChild(final Node child, final int index) {
+	// return false;
+	// }
 
 	/***********************************************************************
 	 * Source Object
@@ -179,10 +181,13 @@ public class EditNode extends ComponentNode {
 		return propertyType;
 	}
 
+	@Deprecated
 	public void setRepeat(final int cnt) {
-		if (modelObject != null) {
-			modelObject.setRepeat(cnt);
-		}
+		if (getTLModelObject() instanceof TLProperty)
+			((TLProperty) getTLModelObject()).setRepeat(cnt);
+		// if (modelObject != null) {
+		// modelObject.setRepeat(cnt);
+		// }
 	}
 
 	public void setUseType(final String use) {
@@ -202,6 +207,11 @@ public class EditNode extends ComponentNode {
 	 */
 	public void setTLType(final Node tlType) {
 		this.tlType = tlType;
+	}
+
+	@Override
+	public TLModelElement getTLModelObject() {
+		return null;
 	}
 
 }

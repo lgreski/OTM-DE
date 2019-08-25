@@ -21,7 +21,9 @@ import org.opentravel.schemas.node.Node;
 import org.opentravel.schemas.node.interfaces.INode;
 
 /**
- * 4/26/2012 - dmh - this is no longer used (I think) - see LibraryTreeLabelProvider
+ * @deprecated 4/26/2012 - dmh - this is no longer used (I think) - see LibraryTreeLabelProvider
+ * 
+ *             1/7/2019 - added asserts
  * 
  * @author Dave Hollander
  * 
@@ -29,16 +31,19 @@ import org.opentravel.schemas.node.interfaces.INode;
  *         http://www.vogella.de/articles/EclipseJFaceTree/article.html#example
  * 
  */
+@Deprecated
 public class TypeTreeLabelProvider extends LabelProvider {
 
-    @Override
-    public Image getImage(final Object element) {
-        return ((Node) element).getImage();
-    }
+	@Override
+	public Image getImage(final Object element) {
+		assert false;
+		return ((Node) element).getImage();
+	}
 
-    @Override
-    public String getText(final Object element) {
-        return ((INode) element).getName();
-    }
+	@Override
+	public String getText(final Object element) {
+		assert false;
+		return ((INode) element).getName();
+	}
 
 }

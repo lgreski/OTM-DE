@@ -20,8 +20,8 @@ package org.opentravel.schemas.commands;
 
 import org.eclipse.core.commands.ExecutionEvent;
 import org.eclipse.core.commands.ExecutionException;
-import org.opentravel.schemas.node.DocumentationHandler;
 import org.opentravel.schemas.node.Node;
+import org.opentravel.schemas.node.handlers.DocumentationHandler;
 import org.opentravel.schemas.stl2developer.OtmRegistry;
 import org.opentravel.schemas.wizards.SetDocumentationWizard;
 import org.slf4j.Logger;
@@ -57,7 +57,7 @@ public class AddDocumentationsHandler extends OtmAbstractHandler {
 	private void saveDoc(Node n, SetDocumentationWizard.DocTypes type, String text) {
 		if (n == null || type == null || text.isEmpty())
 			return;
-		DocumentationHandler dh = n.getDocHander();
+		DocumentationHandler dh = n.getDocHandler();
 		if (dh == null)
 			return;
 

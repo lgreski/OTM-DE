@@ -19,7 +19,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import org.eclipse.swt.graphics.Image;
-import org.opentravel.schemacompiler.model.NamedEntity;
+import org.opentravel.schemacompiler.model.LibraryElement;
 import org.opentravel.schemacompiler.model.TLDocumentation;
 import org.opentravel.schemacompiler.model.TLDocumentationOwner;
 import org.opentravel.schemacompiler.model.TLEquivalent;
@@ -27,26 +27,28 @@ import org.opentravel.schemacompiler.model.TLEquivalentOwner;
 import org.opentravel.schemacompiler.model.TLExample;
 import org.opentravel.schemacompiler.model.TLExampleOwner;
 import org.opentravel.schemacompiler.model.TLModelElement;
-import org.opentravel.schemas.modelObject.TLnSimpleAttribute;
-import org.opentravel.schemas.node.AliasNode;
 import org.opentravel.schemas.node.ComponentNode;
-import org.opentravel.schemas.node.ExtensionPointNode;
-import org.opentravel.schemas.node.ImpliedNode;
 import org.opentravel.schemas.node.Node;
-import org.opentravel.schemas.node.VWA_Node;
-import org.opentravel.schemas.node.facets.ContextualFacetNode;
-import org.opentravel.schemas.node.facets.ContributedFacetNode;
-import org.opentravel.schemas.node.facets.FacetNode;
-import org.opentravel.schemas.node.facets.OperationFacetNode;
+import org.opentravel.schemas.node.NodeFactory;
+import org.opentravel.schemas.node.handlers.ConstraintHandler;
+import org.opentravel.schemas.node.handlers.EqExOneValueHandler;
+import org.opentravel.schemas.node.handlers.EqExOneValueHandler.ValueWithContextType;
+import org.opentravel.schemas.node.interfaces.FacadeInterface;
+import org.opentravel.schemas.node.interfaces.FacetInterface;
 import org.opentravel.schemas.node.interfaces.INode;
+import org.opentravel.schemas.node.interfaces.LibraryMemberInterface;
 import org.opentravel.schemas.node.libraries.LibraryNode;
 import org.opentravel.schemas.node.listeners.BaseNodeListener;
-import org.opentravel.schemas.node.listeners.TypeUserListener;
-import org.opentravel.schemas.types.TypeProvider;
-import org.opentravel.schemas.types.TypeUser;
+import org.opentravel.schemas.node.listeners.ListenerFactory;
+import org.opentravel.schemas.node.listeners.NodeIdentityListener;
+import org.opentravel.schemas.node.typeProviders.VWA_Node;
 import org.opentravel.schemas.types.TypeUserHandler;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
+ * Base class for all property node. Subtypes add abilities to have type assigned and change from one role to another.
+ * <p>
  * Property nodes control element (property), attribute and indicator property model objects Simple Attributes and
  * others. (See PropertyNodeType: Role, Literal, Alias, Simple)
  * 
@@ -56,150 +58,43 @@ import org.opentravel.schemas.types.TypeUserHandler;
  * @author Dave Hollander
  * 
  */
-public class PropertyNode extends ComponentNode implements TypeUser {
-	// private static final Logger LOGGER = LoggerFactory.getLogger(PropertyNode.class);
-
-	/**
-	 * A property within a facet can change roles. This class keeps track of the various implementations that may be
-	 * used for any property. All properties that can be alternated between should share this class.
-	 * 
-	 * @author Dave Hollander
-	 * 
-	 */
-	protected class AlternateRoles {
-		public PropertyNodeType currentType;
-		public ElementNode oldEleN = null;
-		public IndicatorNode oldIndN = null;
-		public AttributeNode oldAttrN = null;
-		public IndicatorElementNode oldIndEleN = null;
-		public ElementReferenceNode oldEleRefN = null;
-		public AttributeReferenceNode oldAttrRefN = null;
-		public IdNode oldIdN = null;
-
-		public AlternateRoles(PropertyNode pn) {
-			// Have to use role assigned not class because it is used in chained constructors
-			// so the class type may be wrong.
-			switch (pn.getPropertyType()) {
-			case ELEMENT:
-				oldEleN = (ElementNode) pn;
-				break;
-			case ATTRIBUTE:
-				oldAttrN = (AttributeNode) pn;
-				break;
-			case ID:
-				oldIdN = (IdNode) pn;
-				break;
-			case ID_REFERENCE:
-				oldEleRefN = (ElementReferenceNode) pn;
-				break;
-			case ID_ATTR_REF:
-				oldAttrRefN = (AttributeReferenceNode) pn;
-				break;
-			case INDICATOR:
-				oldIndN = (IndicatorNode) pn;
-				break;
-			case INDICATOR_ELEMENT:
-				oldIndEleN = (IndicatorElementNode) pn;
-				break;
-			default:
-				break;
-			}
-			currentType = pn.getPropertyType();
-		}
-
-		/**
-		 * If an old copy of this property has been saved, return it; otherwise create a new property. New properties
-		 * are saved.
-		 * 
-		 * @param type
-		 * @param propertyNode
-		 * @return property or null if not supported for the property type or this was already that type.
-		 */
-		public PropertyNode oldOrNew(PropertyNodeType type) {
-			assert getParent() instanceof PropertyOwnerInterface;
-			PropertyOwnerInterface parent = (PropertyOwnerInterface) getParent();
-
-			if (currentType.equals(type))
-				return null;
-			PropertyNode pn = null;
-			switch (type) {
-			case ELEMENT:
-				// set pn to saved element if there is one or else create an element
-				pn = oldEleN != null ? oldEleN : new ElementNode(parent, getName());
-				oldEleN = (ElementNode) pn;
-				break;
-			case ID_REFERENCE:
-				pn = oldEleRefN != null ? oldEleRefN : new ElementReferenceNode(parent, getName());
-				oldEleRefN = (ElementReferenceNode) pn;
-				break;
-			case ID_ATTR_REF:
-				pn = oldAttrRefN != null ? oldAttrRefN : new AttributeReferenceNode(parent, getName());
-				oldAttrRefN = (AttributeReferenceNode) pn;
-				break;
-			case ATTRIBUTE:
-				pn = oldAttrN != null ? oldAttrN : new AttributeNode(parent, getName());
-				oldAttrN = (AttributeNode) pn;
-				break;
-			case INDICATOR:
-				pn = oldIndN != null ? oldIndN : new IndicatorNode(parent, getName());
-				oldIndN = (IndicatorNode) pn;
-				break;
-			case INDICATOR_ELEMENT:
-				pn = oldIndEleN != null ? oldIndEleN : new IndicatorElementNode(parent, getName());
-				oldIndEleN = (IndicatorElementNode) pn;
-				break;
-			case ID:
-				pn = oldIdN != null ? oldIdN : new IdNode(parent, getName());
-				oldIdN = (IdNode) pn;
-				break;
-			default:
-
-			}
-			if (pn != null)
-				pn.alternateRoles = this; // in case there was a new node created.
-			currentType = type;
-			return pn;
-		}
-
-	}
+public abstract class PropertyNode extends ComponentNode {
+	private static final Logger LOGGER = LoggerFactory.getLogger(PropertyNode.class);
 
 	/**
 	 * Move the property up/down in its current facet.
 	 * 
-	 * @param - direction (up/1 or down/2)
+	 * @param -
+	 *            direction (up/1 or down/2)
 	 * @return false if it could not be moved (was at end of list of that type of properties).
 	 */
 	public static final int UP = 1;
 	public static final int DOWN = 2;
-	protected AlternateRoles alternateRoles;
 
 	protected IValueWithContextHandler equivalentHandler = null;
 	protected IValueWithContextHandler exampleHandler = null;
 	protected TypeUserHandler typeHandler = null;
+	public ConstraintHandler constraintHandler = null;
+	protected PropertyRoleChangeHandler changeHandler = null;
+
+	/**
+	 * Only used for facade properties that have no TL Model Object.
+	 */
+	public PropertyNode() {
+	}
 
 	/**
 	 * Create a property node to represent the passed TL Model object.
 	 * 
 	 * @param obj
-	 * @param propertyType
 	 */
-	protected PropertyNode(final TLModelElement tlObj, INode parent, final PropertyNodeType propertyType) {
+	protected PropertyNode(final TLModelElement tlObj, FacetInterface parent) {
 		super(tlObj);
-		this.alternateRoles = new AlternateRoles(this);
-		if (parent instanceof ContributedFacetNode)
-			parent = ((ContributedFacetNode) parent).getContributor();
-		if (parent != null) {
-			parent.getModelObject().addChild(tlObj); // link to TL model
-			((Node) parent).linkChild(this); // link to node model
-		}
 
-		typeHandler = new TypeUserHandler(this);
+		if (parent != null)
+			parent.add(this);
 
-		if (getRequiredType() != null)
-			typeHandler.set(this.getRequiredType());
-
-		// fix context assures example and equivalent are in this context
-		fixContext();
+		fixContext(); // fix context assures example and equivalent are in this context
 	}
 
 	/**
@@ -210,58 +105,97 @@ public class PropertyNode extends ComponentNode implements TypeUser {
 	 * @param name
 	 *            to give the property
 	 */
-	protected PropertyNode(final TLModelElement tlObj, final Node parent, final String name, final PropertyNodeType type) {
-		this(tlObj, parent, type);
+	protected PropertyNode(final TLModelElement tlObj, final FacetInterface parent, final String name) {
+		this(tlObj, parent);
 		setName(name);
 
 		// Properties added to minor versions must be optional
-		if (getLibrary() != null && getLibrary().isMinorVersion() && !inherited)
+		if (getLibrary() != null && getLibrary().isMinorVersion() && !isInherited())
 			setMandatory(false);
 	}
 
+	/**
+	 * Add this TLModelObject to the passed owner.
+	 * 
+	 * @param owner
+	 *            - property owner (facet) to add this to
+	 */
+	public void addToTL(FacetInterface owner) {
+		addToTL(owner, -1);
+	}
+
+	// TODO - refactor to sub-types
 	@Override
-	public boolean canAssign(Node type) {
-		if (type == null || !(type instanceof TypeProvider))
-			return false;
-		return true;
+	public ConstraintHandler getConstraintHandler() {
+		return constraintHandler;
 	}
 
 	/**
+	 * Add this TLModelObject to the passed owner.
+	 * 
+	 * @param owner
+	 *            - property owner (facet) to add this to
+	 * @param index
+	 *            - index into child array to set order or -1
+	 */
+	public abstract void addToTL(final FacetInterface owner, final int index);
+
+	// TODO - make sure all sub-type impls call super first
+	@Override
+	public abstract boolean canAssign(Node type);
+
+	/**
 	 * Replace this property with one of the specified type. Uses the saved alternateRole or creates a new property. All
-	 * values that can be copied will be. The old property is saved.
-	 * 
-	 * It this has a parent, the new role must be valid or else this is returned.
-	 * 
-	 * If this does not have a parent, then the new property is returned without parent.
-	 * 
-	 * All copies share the same alternateRoles instance.
+	 * values that can be copied will be. The old property is saved. All copies share the same alternateRoles instance.
+	 * <p>
+	 * The parent is checked to assure it can own the requested type.If not, ATTRIBUTE is used as toType.
 	 * 
 	 * @param toType
+	 * @param parent
+	 *            - optional property checked to assure it can own the toType. getParent() used if omitted.
 	 * @return the new property, or this property if change could not be made.
 	 */
 	public PropertyNode changePropertyRole(PropertyNodeType toType) {
-		PropertyNode newProperty = null;
+		if (getChangeHandler() != null)
+			return getChangeHandler().changePropertyRole(toType);
+		return this;
+	}
 
-		if (getParent().isValidParentOf(toType)) {
-			newProperty = alternateRoles.oldOrNew(toType);
-			if (newProperty != null) {
-				newProperty.copyDetails(this);
-				swap(newProperty);
+	public PropertyNode changePropertyRole(PropertyNodeType toType, FacetInterface parent) {
+		if (getChangeHandler() != null)
+			return getChangeHandler().changePropertyRole(toType, parent);
+		return this;
+	}
 
-				// Now do type assignments
-				if (newProperty.getRequiredType() == null) {
-					// Has a user assigned type. Reuse previous assignment if any or else try type assigned to this.
-					TypeProvider newType = newProperty.getAssignedType();
-					if (newType == null || newType instanceof ImpliedNode)
-						newType = getAssignedType();
-					newProperty.setAssignedType(newType);
-				}
-				// Clear type assignments to <i>this</i> property to keep where used in sync.
-				getAssignedType().getWhereAssignedHandler().remove(this);
-				// Leave the type assigned to the TL Object for use as assigned type if they change back later.
-			}
+	/**
+	 * Clone the TLModelObject and create clone node using factory. Assign clone to parent. Set whereUsed on assigned
+	 * type.
+	 * 
+	 * @param parent
+	 *            FacetInterface to add clone to
+	 * @param nameSuffix
+	 *            added at end of name if not null
+	 */
+	@Override
+	public PropertyNode clone(Node parent, String nameSuffix) {
+		// sub-types must assign type
+		PropertyNode clone = null;
+		// if (parent instanceof FacetInterface) {
+		LibraryElement clonedTL = getTLModelObject().cloneElement();
+		if (clonedTL instanceof TLModelElement) {
+			clone = (PropertyNode) NodeFactory.newChild(parent, (TLModelElement) clonedTL);
+			assert clone instanceof PropertyNode;
+			if (nameSuffix != null)
+				clone.setName(clone.getName() + nameSuffix);
+
 		}
-		return newProperty == null ? this : newProperty;
+		if (parent instanceof FacetInterface)
+			((FacetInterface) parent).add(clone);
+		return clone;
+	}
+
+	public boolean isMandatory() {
+		return false;
 	}
 
 	/**
@@ -275,7 +209,6 @@ public class PropertyNode extends ComponentNode implements TypeUser {
 
 		setName(getName());
 		setMandatory(isMandatory());
-		// setIdentity(source.getIdentity());
 
 		TLDocumentation doc, sDoc;
 		if (tlTarget instanceof TLDocumentationOwner && tlSource instanceof TLDocumentationOwner) {
@@ -301,7 +234,8 @@ public class PropertyNode extends ComponentNode implements TypeUser {
 	 * If <i>this</i> property does not have a type, assign it to the source node. Otherwise, create a new property
 	 * after <i>this</i>node. Use the passed node as the type.
 	 * 
-	 * @param - the type to assign.
+	 * @param -
+	 *            the type to assign.
 	 */
 	@Override
 	public INode createProperty(final Node type) {
@@ -309,65 +243,36 @@ public class PropertyNode extends ComponentNode implements TypeUser {
 		return n;
 	}
 
-	@Override
-	public INode.CommandType getAddCommand() {
-		return INode.CommandType.PROPERTY;
-	}
+	protected INode createProperty(final PropertyNode clone, final Node type) {
+		// sub-type use this after making clone
+		clone.addToTL((FacetInterface) getParent(), indexOfNode());
+		clone.setName(type.getName());
+		clone.setDescription(type.getDescription());
 
-	@Override
-	public NamedEntity getAssignedTLNamedEntity() {
-		return (modelObject != null ? modelObject.getTLType() : null);
-	}
-
-	@Override
-	public TLModelElement getAssignedTLObject() {
-		return typeHandler.getTLModelElement();
+		// Tell the parent to clear its children cache because it has a new child
+		getParent().getChildrenHandler().clear();
+		return clone;
 	}
 
 	/**
-	 * Override to handle inherited properties by getting the inheritsFrom property.
-	 * 
-	 * @return
+	 * Remove from TL owner and clear where assigned and parent's children handler.
 	 */
 	@Override
-	public TypeProvider getAssignedType() {
-		if (isInherited()) {
-			// Inherited nodes are not assigned a type class. If they were the where-used count would be wrong.
-			assert getInheritsFrom() != this;
-			if (getInheritsFrom() != null) {
-				return ((TypeUser) getInheritsFrom()).getAssignedType();
-			}
-			return null;
+	public void delete() {
+		// delegate to type handling sub-classes to assign type
+		if (isDeleted() || getParent() == null)
+			return;
+		deleteTL();
+		deleted = true;
+	}
+
+	@Override
+	public void deleteTL() {
+		if (getTLModelObject() != null) {
+			removeFromTL();
+			ListenerFactory.clearListners(getTLModelObject()); // remove any listeners
+			getParent().getChildrenHandler().clear(); // tell parent to update list
 		}
-		return typeHandler.get();
-	}
-
-	@Override
-	public String getEquivalent(String context) {
-		return equivalentHandler != null ? equivalentHandler.get(context) : "";
-	}
-
-	/**
-	 * @return equivalent handler if property has equivalents, null otherwise
-	 */
-	@Override
-	public IValueWithContextHandler getEquivalentHandler() {
-		return equivalentHandler;
-	}
-
-	/**
-	 * If context is null, get default example
-	 */
-	@Override
-	public String getExample(String context) {
-		return exampleHandler != null ? exampleHandler.get(context) : "";
-	}
-
-	/**
-	 * @return equivalent handler if property has equivalents, null otherwise
-	 */
-	public IValueWithContextHandler getExampleHandler() {
-		return exampleHandler;
 	}
 
 	/**
@@ -376,26 +281,73 @@ public class PropertyNode extends ComponentNode implements TypeUser {
 	public void fixContext() {
 		if (getLibrary() == null)
 			return;
-		if (isEditable()) {
-			if (getExampleHandler() != null)
-				exampleHandler.fix(null);
-			if (getEquivalentHandler() != null)
-				equivalentHandler.fix(null);
-		}
+		// if (isEditable()) {
+		if (getExampleHandler() != null)
+			exampleHandler.fix(null);
+		if (getEquivalentHandler() != null)
+			equivalentHandler.fix(null);
+		// }
+	}
+
+	@Override
+	public INode.CommandType getAddCommand() {
+		return INode.CommandType.PROPERTY;
+	}
+
+	public PropertyRoleChangeHandler getChangeHandler() {
+		return changeHandler;
+	}
+
+	public void setChangeHandler(PropertyRoleChangeHandler handler) {
+		changeHandler = handler;
+	}
+
+	public String getEquivalent(String context) {
+		return getEquivalentHandler() != null ? getEquivalentHandler().get(context) : "";
+	}
+
+	/**
+	 * @return equivalent handler if property has equivalents, null otherwise
+	 */
+	@Override
+	public IValueWithContextHandler getEquivalentHandler() {
+		if (getTLModelObject() instanceof TLEquivalentOwner)
+			if (equivalentHandler == null)
+				equivalentHandler = new EqExOneValueHandler(this, ValueWithContextType.EQUIVALENT);
+		return equivalentHandler;
+	}
+
+	/**
+	 * If context is null, get default example
+	 */
+	public String getExample(String context) {
+		return getExampleHandler() != null ? getExampleHandler().get(context) : "";
+	}
+
+	/**
+	 * @return equivalent handler if property has equivalents, null otherwise
+	 */
+	@Override
+	public IValueWithContextHandler getExampleHandler() {
+		if (getTLModelObject() instanceof TLExampleOwner)
+			if (exampleHandler == null)
+				exampleHandler = new EqExOneValueHandler(this, ValueWithContextType.EXAMPLE);
+		return exampleHandler;
 	}
 
 	/**
 	 * Return images for properties.
 	 */
 	@Override
-	public Image getImage() {
-		throw new IllegalAccessError("Tried to get image from abstract property.");
-	}
+	public abstract Image getImage();
 
 	@Override
 	public String getLabel() {
 		return getName();
 	}
+
+	@Override
+	public abstract String getName();
 
 	/**
 	 * Properties are always in the library of their owning component.
@@ -409,53 +361,44 @@ public class PropertyNode extends ComponentNode implements TypeUser {
 		return getOwningComponent().getLibrary() != null ? getOwningComponent().getLibrary() : null;
 	}
 
-	@Override
-	public BaseNodeListener getNewListener() {
-		return new TypeUserListener(this);
-	}
-
-	/**
-	 * Overridden to provide assigned type and aliases if deep is set.
-	 */
-	@Override
-	public List<Node> getTreeChildren(boolean deep) {
-		return getNavChildren(deep);
-	}
-
 	/**
 	 * Return new array containing assigned type if an alias its parent
 	 */
+	@Override
 	public List<Node> getNavChildren(boolean deep) {
-		List<Node> kids = new ArrayList<Node>();
-		if (deep) {
-			Node typeNode = (Node) getAssignedType();
-			kids.add(typeNode);
-
-			// If it is an alias, add its object as well.
-			if (typeNode instanceof AliasNode)
-				kids.add(typeNode.getParent());
-		}
+		List<Node> kids = new ArrayList<>();
 		return kids;
 	}
 
 	@Override
-	public Node getOwningComponent() {
-		if (getParent() == null || getParent().getParent() == null)
-			return this;
-		if (getParent() instanceof OperationFacetNode)
-			return getParent();
-		if (getParent() instanceof ExtensionPointNode)
-			return getParent();
-		// EnumLiterals are overridden.
-		// If version 1.6 or later return the parent contextual facet
-		if (getParent() instanceof ContextualFacetNode)
-			// return getParent().getOwningComponent();
-			return ((ContextualFacetNode) getParent()).canBeLibraryMember() ? getParent() : getParent()
-					.getOwningComponent();
+	public BaseNodeListener getNewListener() {
+		return new NodeIdentityListener(this);
+	}
 
-		// Otherwise Properties are always owned by a facet.
-		// TODO - delegate as is done with contextual facets
-		return getParent().getParent().isNamedEntity() ? getParent().getParent() : this;
+	@Override
+	public LibraryMemberInterface getOwningComponent() {
+		if (getParent() == null)
+			return null;
+		return getParent().getOwningComponent();
+	}
+
+	@Override
+	public abstract Node getParent();
+
+	/**
+	 * Get the parent from the passed TLModelElement's identity listener. Should be called by all children of facets
+	 * because the parent may have failed to rebuild children Create change handler if it is not present.
+	 * 
+	 * @param owner
+	 *            the TLModelElement of the property owner
+	 * @return
+	 */
+	public Node getParent(TLModelElement owner, boolean createChangeHandler) {
+		if ((parent == null || parent.isDeleted()) && getTLModelObject() != null)
+			parent = Node.GetNode(owner);
+		if (createChangeHandler && parent instanceof FacetInterface && changeHandler == null)
+			changeHandler = new PropertyRoleChangeHandler(this, parent);
+		return parent;
 	}
 
 	/**
@@ -475,44 +418,24 @@ public class PropertyNode extends ComponentNode implements TypeUser {
 	// TODO - add function to PropertyNodeType class to accept a node and return type
 	public PropertyNodeType getPropertyType() {
 		return PropertyNodeType.getPropertyType(this);
-		// return propertyType;
 	}
 
+	/**
+	 * Overridden to provide assigned type and aliases if deep is set.
+	 */
 	@Override
-	public TypeProvider getRequiredType() {
-		return null; // override for properties with fixed types
-	}
-
-	@Override
-	public Node getType() {
-		return (Node) getAssignedType();
-	}
-
-	@Override
-	public String getTypeName() {
-		return typeHandler.getName();
-	}
-
-	@Override
-	public String getTypeNameWithPrefix() {
-		String typeName = getTypeName() == null ? "" : getTypeName();
-		if (getAssignedType() == null)
-			return "";
-		if (getAssignedType() instanceof ImpliedNode)
-			return typeName;
-		if (getPrefix().equals(getAssignedPrefix()))
-			return typeName;
-		return getType().getPrefix() + " : " + typeName;
+	public List<Node> getTreeChildren(boolean deep) {
+		return getNavChildren(deep);
 	}
 
 	/**
 	 * True if it has assigned type
 	 */
 	@Override
-	public boolean hasNavChildren(boolean deep) {
-		// return getTypeNode() != null;
-		return deep && getAssignedType() != null;
-	}
+	public abstract boolean hasNavChildren(boolean deep);
+	// {
+	// return false;
+	// }
 
 	/**
 	 * Node index is the order in the node list. Node lists are not separated by node types as they are in TL Model
@@ -520,7 +443,11 @@ public class PropertyNode extends ComponentNode implements TypeUser {
 	 * 
 	 * @return
 	 */
+	// FIXME - one of these has to become private
+	@Deprecated
 	public int indexOfNode() {
+		if (getParent() == null || getParent().getChildren() == null)
+			return 0;
 		int index = getParent().getChildren().indexOf(this) + 1;
 		return ((index < 1) || (index > getParent().getChildren().size())) ? index = getParent().getChildren().size()
 				: index;
@@ -532,6 +459,8 @@ public class PropertyNode extends ComponentNode implements TypeUser {
 	 * 
 	 * @return - index between 0 and size() of the array containing like properties.
 	 */
+	// FIXME - one of these has to become private
+	@Deprecated
 	public int indexOfTLProperty() {
 		return 0;
 	}
@@ -539,26 +468,16 @@ public class PropertyNode extends ComponentNode implements TypeUser {
 	// @Override
 	public boolean isAssignedComplexType() {
 		// Need to test because inherited properties do not have assigned types.
-		return getAssignedType() != null ? getAssignedType().isAssignedByReference() : false;
-	}
-
-	@Override
-	public boolean isEnabled_AddProperties() {
-		return this != getOwningComponent() ? getOwningComponent().isEnabled_AddProperties() : false;
-	}
-
-	/**
-	 * @return true if indicator element or attribute.
-	 */
-	public boolean isIndicator() {
+		// return getAssignedType() != null ? getAssignedType().isAssignedByReference() : false;
 		return false;
 	}
 
 	@Override
 	public boolean isDeleteable() {
-		if (modelObject == null)
+		if (getTLModelObject() == null)
 			return false;
-		if (getModelObject().getTLModelObj() instanceof TLnSimpleAttribute)
+		if (this instanceof FacadeInterface)
+			// Core simple attribute facade node
 			return false;
 		if (isInherited())
 			return false;
@@ -566,27 +485,25 @@ public class PropertyNode extends ComponentNode implements TypeUser {
 	}
 
 	@Override
-	public boolean isMissingAssignedType() {
-		// LOGGER.debug("check property node "+getName()+" for missing type. "+modelObject);
-		if (modelObject == null || modelObject.getTLModelObj() == null)
-			return true;
-		if (modelObject.getTLType() == null)
-			return true;
-		return false;
+	public boolean isEnabled_AddProperties() {
+		if (getOwningComponent() == null)
+			return false;
+		return this != getOwningComponent() ? getOwningComponent().isEnabled_AddProperties() : false;
 	}
 
 	/**
 	 * Properties can only be a navigation child in deep mode. Non-typed properties override with false.
 	 */
 	@Override
-	public boolean isNavChild(boolean deep) {
-		return deep;
-	}
+	public abstract boolean isNavChild(boolean deep);
+	// {
+	// return deep;
+	// }
 
 	// Override if not re-nameable.
 	@Override
 	public boolean isRenameable() {
-		return isEditable() && !inherited && getAssignedType().isRenameableWhereUsed();
+		return isEditable() && !isInherited();
 	}
 
 	/**
@@ -596,52 +513,33 @@ public class PropertyNode extends ComponentNode implements TypeUser {
 		return getOwningComponent() instanceof VWA_Node;
 	}
 
+	public void moveDown() {
+		if (!isEditable_newToChain())
+			return;
+		int index = parent.getChildren().indexOf(this);
+		if (index < parent.getChildren().size() - 1) {
+			moveDownTL();
+			parent.getChildrenHandler().clear();
+		}
+	}
+
 	/**
 	 * Move this property from its current node to the new facet. Tested with Move_Tests.
 	 * 
 	 * @param newFacet
 	 */
-	public void moveProperty(FacetNode newFacet) {
+	public void moveProperty(FacetInterface newFacet) {
 		removeProperty();
-		newFacet.addProperty(this);
+		((ComponentNode) newFacet).addProperty(this);
 	}
 
-	/**
-	 * 
-	 * @param direction
-	 * @return true if moved, false otherwise
-	 */
-	public boolean moveProperty(final int direction) {
+	public void moveUp() {
 		if (!isEditable_newToChain())
-			return false;
-		boolean ret = false;
-		// we don't have to sort children since their are always sorted
-		if (direction == UP) {
-			ret = modelObject.moveUp(); // move the actual TL Property.
-			if (ret)
-				moveUp();
-		} else if (direction == DOWN) {
-			ret = modelObject.moveDown(); // move the actual TL Property.
-			if (ret)
-				moveDown();
-		}
-		// LOGGER.warn("Do not understand direction: " + direction);
-		return ret;
-	}
-
-	private void moveDown() {
-		int index = parent.getChildren().indexOf(this);
-		if (index < parent.getChildren().size() - 1) {
-			parent.getChildren().remove(index++);
-			parent.getChildren().add(index, this);
-		}
-	}
-
-	private void moveUp() {
+			return;
 		int index = parent.getChildren().indexOf(this);
 		if (index > 0) {
-			parent.getChildren().remove(index--);
-			parent.getChildren().add(index, this);
+			moveUpTL();
+			parent.getChildrenHandler().clear();
 		}
 	}
 
@@ -649,30 +547,10 @@ public class PropertyNode extends ComponentNode implements TypeUser {
 	 * Remove this property from its parent facet and its TL Object from its TL Parent
 	 */
 	public void removeProperty() {
-		this.unlinkNode();
-		this.getModelObject().removeFromTLParent();
-	}
-
-	@Override
-	public boolean setAssignedType() {
-		return typeHandler.set();
-	}
-
-	@Override
-	public boolean setAssignedType(TLModelElement tlProvider) {
-		return typeHandler.set(tlProvider);
-	}
-
-	@Override
-	public boolean setAssignedType(TypeProvider provider) {
-		return typeHandler.set(provider);
-	}
-
-	@Override
-	public void setContext() {
-		// Read/write forces to default context
-		setEquivalent(getEquivalent(null));
-		setExample(getExample(null));
+		removeFromTL();
+		if (getParent() != null)
+			getParent().getChildrenHandler().clear();
+		setParent(null);
 	}
 
 	public IValueWithContextHandler setEquivalent(String equivalent) {
@@ -684,36 +562,32 @@ public class PropertyNode extends ComponentNode implements TypeUser {
 	}
 
 	@Override
+	@Deprecated
 	public void setLibrary(LibraryNode lib) {
+		// getOwningComponent().setLibrary(lib);
 		// LOGGER.debug("Obsolete - property set library - library is always from owner");
 	}
 
 	@Override
-	public void setName(final String name) {
-		setName(name);
-	}
-
-	@Override
-	public void sort() {
-		getParent().sort();
-	}
+	public abstract void setName(final String name);
 
 	/**
 	 * Remove <i>this</i> property from the parent and add the <i>newProperty</i> in its place.
 	 */
 	public void swap(PropertyNode newProperty) {
-		// Link new property to the parent node.
-		getParent().linkChild(newProperty); // no family processing needed
-		// Add the new property TL element to its TL Parent
-		newProperty.modelObject.addChild(newProperty.getTLModelObject());
-		// Remove this TL element from its TL parent.
-		modelObject.removeFromTLParent();
-		// Remove this property from its parent
-		getParent().getChildren().remove(this);
-
-		// Remove from current TL parent and add to new. Model object will ignore if no parent.
-		modelObject.removeFromTLParent();
-		getParent().getModelObject().addChild(newProperty.getTLModelObject());
+		if (getParent() instanceof FacetInterface)
+			newProperty.addToTL((FacetInterface) getParent());
+		removeProperty();
 	}
+
+	public void setMandatory(final boolean selection) {
+		// Override where supported
+	}
+
+	protected abstract void moveDownTL();
+
+	protected abstract void moveUpTL();
+
+	protected abstract void removeFromTL();
 
 }

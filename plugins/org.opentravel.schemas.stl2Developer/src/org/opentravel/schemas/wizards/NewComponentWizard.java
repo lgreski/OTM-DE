@@ -21,7 +21,6 @@ import org.eclipse.jface.viewers.IDoubleClickListener;
 import org.eclipse.jface.wizard.Wizard;
 import org.eclipse.jface.wizard.WizardDialog;
 import org.eclipse.swt.widgets.Shell;
-import org.opentravel.schemacompiler.model.TLAliasOwner;
 import org.opentravel.schemacompiler.model.TLBusinessObject;
 import org.opentravel.schemacompiler.model.TLChoiceObject;
 import org.opentravel.schemacompiler.model.TLClosedEnumeration;
@@ -32,22 +31,22 @@ import org.opentravel.schemacompiler.model.TLLibraryMember;
 import org.opentravel.schemacompiler.model.TLOpenEnumeration;
 import org.opentravel.schemacompiler.model.TLSimple;
 import org.opentravel.schemacompiler.model.TLValueWithAttributes;
-import org.opentravel.schemas.modelObject.BusinessObjMO;
-import org.opentravel.schemas.modelObject.ModelObject;
-import org.opentravel.schemas.node.AliasNode;
-import org.opentravel.schemas.node.ChoiceObjectNode;
-import org.opentravel.schemas.node.ComponentNode;
 import org.opentravel.schemas.node.ComponentNodeType;
 import org.opentravel.schemas.node.EditNode;
 import org.opentravel.schemas.node.Node;
 import org.opentravel.schemas.node.NodeFactory;
 import org.opentravel.schemas.node.ServiceNode;
-import org.opentravel.schemas.node.facets.ChoiceFacetNode;
-import org.opentravel.schemas.node.facets.ContextualFacetNode;
-import org.opentravel.schemas.node.facets.CustomFacetNode;
-import org.opentravel.schemas.node.facets.QueryFacetNode;
+import org.opentravel.schemas.node.interfaces.AliasOwner;
 import org.opentravel.schemas.node.interfaces.ContextualFacetOwnerInterface;
+import org.opentravel.schemas.node.interfaces.LibraryMemberInterface;
 import org.opentravel.schemas.node.libraries.LibraryNode;
+import org.opentravel.schemas.node.typeProviders.AliasNode;
+import org.opentravel.schemas.node.typeProviders.ChoiceFacetNode;
+import org.opentravel.schemas.node.typeProviders.ChoiceObjectNode;
+import org.opentravel.schemas.node.typeProviders.ContextualFacetNode;
+import org.opentravel.schemas.node.typeProviders.CustomFacetNode;
+import org.opentravel.schemas.node.typeProviders.QueryFacetNode;
+import org.opentravel.schemas.node.typeProviders.facetOwners.BusinessObjectNode;
 import org.opentravel.schemas.properties.Images;
 import org.opentravel.schemas.properties.Messages;
 import org.opentravel.schemas.stl2developer.NavigatorMenus;
@@ -81,8 +80,8 @@ public class NewComponentWizard extends Wizard implements IDoubleClickListener {
 	@Override
 	public void addPages() {
 		ImageDescriptor imageDesc = Images.getImageRegistry().getDescriptor("AddComponent");
-		ncPage1 = new NewComponentWizardPage("CreateComponent", Messages.getString("wizard.newObject.title"),
-				imageDesc, targetNode);
+		ncPage1 = new NewComponentWizardPage("CreateComponent", Messages.getString("wizard.newObject.title"), imageDesc,
+				targetNode);
 		addPage(ncPage1);
 
 		serviceSubjectSelectionPage = new TypeSelectionPage(
@@ -92,8 +91,10 @@ public class NewComponentWizard extends Wizard implements IDoubleClickListener {
 		serviceSubjectSelectionPage.addDoubleClickListener(this);
 		// Set the filter to only business objects.
 		TLBusinessObject tlbo = new TLBusinessObject();
-		ModelObject<?> tlmo = new BusinessObjMO(tlbo);
-		serviceSubjectSelectionPage.setTypeSelectionFilter(new TypeTreeExtensionSelectionFilter(tlmo));
+		// ModelObject<?> tlmo = new BusinessObjMO(tlbo);
+		Node filterType = new BusinessObjectNode(tlbo);
+		serviceSubjectSelectionPage.setTypeSelectionFilter(new TypeTreeExtensionSelectionFilter(filterType));
+		// serviceSubjectSelectionPage.setTypeSelectionFilter(new TypeTreeExtensionSelectionFilter(tlmo));
 		serviceSubjectSelectionPage.setTypeTreeContentProvider(new ExtensionTreeContentProvider());
 		addPage(serviceSubjectSelectionPage);
 
@@ -179,7 +180,7 @@ public class NewComponentWizard extends Wizard implements IDoubleClickListener {
 			svc.addCRUDQ_Operations(subject);
 			return svc;
 		case ALIAS:
-			return parent.getTLModelObject() instanceof TLAliasOwner ? new AliasNode(parent, name) : null;
+			return parent instanceof AliasOwner ? new AliasNode((AliasOwner) parent, name) : null;
 		case BUSINESS:
 			cn = linkNewNode(new TLBusinessObject(), lib, name, description);
 			break;
@@ -219,7 +220,8 @@ public class NewComponentWizard extends Wizard implements IDoubleClickListener {
 		return cn;
 	}
 
-	private Node linkContextual(ContextualFacetNode cf, Node subject, LibraryNode lib, String name, String description) {
+	private Node linkContextual(ContextualFacetNode cf, Node subject, LibraryNode lib, String name,
+			String description) {
 		cf.setName(name);
 		cf.setDescription(description);
 		lib.addMember(cf);
@@ -228,54 +230,20 @@ public class NewComponentWizard extends Wizard implements IDoubleClickListener {
 		return cf;
 	}
 
-	private Node linkNewNode(TLLibraryMember tlObj, final LibraryNode lib, final String name, final String description) {
-		ComponentNode cn = NodeFactory.newComponent(tlObj);
+	private Node linkNewNode(TLLibraryMember tlObj, final LibraryNode lib, final String name,
+			final String description) {
+		LibraryMemberInterface cn = NodeFactory.newLibraryMember(tlObj);
 
 		if (cn != null) {
-			cn.setExtensible(true);
+			((Node) cn).setExtensible(true);
 			cn.setName(name);
-			cn.setDescription(description);
+			((Node) cn).setDescription(description);
 			lib.addMember(cn);
 			if (cn instanceof ChoiceObjectNode) {
 				((ChoiceObjectNode) cn).addFacet("A");
 				((ChoiceObjectNode) cn).addFacet("B");
 			}
 		}
-		return cn;
+		return (Node) cn;
 	}
-
-	// private static Node newComponent(ComponentNodeType type) {
-	// TLLibraryMember tlObj = null;
-	//
-	// switch (type) {
-	// case BUSINESS:
-	// tlObj = new TLBusinessObject();
-	// break;
-	// case CHOICE:
-	// tlObj = new TLChoiceObject();
-	// break;
-	// case CORE:
-	// tlObj = new TLCoreObject();
-	// break;
-	// case VWA:
-	// tlObj = new TLValueWithAttributes();
-	// break;
-	// case EXTENSION_POINT:
-	// tlObj = new TLExtensionPointFacet();
-	// break;
-	// case OPEN_ENUM:
-	// tlObj = new TLOpenEnumeration();
-	// break;
-	// case CLOSED_ENUM:
-	// tlObj = new TLClosedEnumeration();
-	// break;
-	// case SIMPLE:
-	// tlObj = new TLSimple();
-	// break;
-	// default:
-	// // LOGGER.debug("Unknown type in new component: "+type);
-	// }
-	// return NodeFactory.newComponent(tlObj);
-	// }
-
 }

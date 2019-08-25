@@ -27,6 +27,7 @@ import org.eclipse.ui.actions.ActionFactory;
 import org.opentravel.schemas.node.Node;
 import org.opentravel.schemas.node.VersionNode;
 import org.opentravel.schemas.node.interfaces.INode;
+import org.opentravel.schemas.node.libraries.LibraryNavNode;
 import org.opentravel.schemas.properties.Messages;
 import org.opentravel.schemas.stl2developer.DialogUserNotifier;
 
@@ -48,8 +49,21 @@ public class DeleteNodesHandler extends OtmAbstractHandler {
 	@Override
 	public Object execute(ExecutionEvent exEvent) throws ExecutionException {
 		List<Node> selectedNodes = mc.getGloballySelectNodes();
-		deleteNodes(selectedNodes);
+		if (isEnabled())
+			deleteNodes(selectedNodes);
 		return null;
+	}
+
+	// dmh - 3/23/2018 - moved control here and commented out section in plugin.xml
+	@Override
+	public boolean isEnabled() {
+		List<Node> selectedNodes = mc.getGloballySelectNodes();
+		if (selectedNodes != null && !selectedNodes.isEmpty()) {
+			Node newSelection = selectedNodes.get(0);
+			if (newSelection != null && !(newSelection instanceof LibraryNavNode))
+				return newSelection.isDeleteable();
+		}
+		return false;
 	}
 
 	/**
@@ -63,7 +77,7 @@ public class DeleteNodesHandler extends OtmAbstractHandler {
 			return;
 
 		// find out if any of the nodes can not be deleted.
-		final List<Node> toDelete = new ArrayList<Node>();
+		final List<Node> toDelete = new ArrayList<>();
 		final StringBuilder doNotDelete = new StringBuilder();
 		int i = 0;
 		for (final Node n : deleteList) {
@@ -78,8 +92,8 @@ public class DeleteNodesHandler extends OtmAbstractHandler {
 
 		if (i > 0)
 			// DialogUserNotifier.openWarning("Object Delete", "The following nodes are not allowed to be deleted: "
-			DialogUserNotifier
-					.openWarning(Messages.getString("OtmW.122"), Messages.getString("OtmW.123") + doNotDelete);
+			DialogUserNotifier.openWarning(Messages.getString("OtmW.122"),
+					Messages.getString("OtmW.123") + doNotDelete);
 
 		// Make the user confirm the list of nodes to be deleted.
 		if (toDelete.size() > 0) {
@@ -97,7 +111,7 @@ public class DeleteNodesHandler extends OtmAbstractHandler {
 				Node currentNode = ((Node) mc.getCurrentNode_TypeView());
 				Node focusNode = null;
 				if (currentNode != null) {
-					focusNode = currentNode.getOwningComponent();
+					focusNode = (Node) currentNode.getOwningComponent();
 					while (toDelete.contains(focusNode)) {
 						focusNode = focusNode.getParent();
 					}

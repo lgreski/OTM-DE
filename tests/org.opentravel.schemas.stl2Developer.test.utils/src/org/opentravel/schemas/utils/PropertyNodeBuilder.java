@@ -18,15 +18,16 @@ package org.opentravel.schemas.utils;
 import org.opentravel.schemacompiler.ic.TypeNameIntegrityChecker;
 import org.opentravel.schemacompiler.model.TLAttribute;
 import org.opentravel.schemacompiler.model.TLDocumentation;
+import org.opentravel.schemacompiler.model.TLModelElement;
 import org.opentravel.schemacompiler.model.TLProperty;
-import org.opentravel.schemas.node.BusinessObjectNode;
 import org.opentravel.schemas.node.ComponentNode;
-import org.opentravel.schemas.node.CoreObjectNode;
 import org.opentravel.schemas.node.ModelNode;
 import org.opentravel.schemas.node.NodeFactory;
-import org.opentravel.schemas.node.VWA_Node;
 import org.opentravel.schemas.node.properties.PropertyNode;
 import org.opentravel.schemas.node.properties.PropertyNodeType;
+import org.opentravel.schemas.node.typeProviders.VWA_Node;
+import org.opentravel.schemas.node.typeProviders.facetOwners.BusinessObjectNode;
+import org.opentravel.schemas.node.typeProviders.facetOwners.CoreObjectNode;
 import org.opentravel.schemas.types.TypeProvider;
 import org.opentravel.schemas.types.TypeUser;
 
@@ -44,7 +45,7 @@ public class PropertyNodeBuilder {
 
 	public static PropertyNodeBuilder create(PropertyNodeType elementType) {
 		Object tlObject = creatTLObject(elementType);
-		ComponentNode newComponentMember = NodeFactory.newMember(null, tlObject);
+		ComponentNode newComponentMember = NodeFactory.newChild(null, (TLModelElement) tlObject);
 		if (newComponentMember instanceof PropertyNode) {
 			return new PropertyNodeBuilder((PropertyNode) newComponentMember);
 		} else {
@@ -76,13 +77,15 @@ public class PropertyNodeBuilder {
 
 	public PropertyNodeBuilder makeSimpleList(String name) {
 		CoreObjectNode coreObject = ComponentNodeBuilder.createCoreObject(name).get();
-		this.propertyNode.setAssignedType((TypeProvider) coreObject.getSimpleListFacet());
+		if (this.propertyNode instanceof TypeUser)
+			((TypeUser) this.propertyNode).setAssignedType((TypeProvider) coreObject.getSimpleListFacet());
 		return this;
 	}
 
 	public PropertyNodeBuilder makeDetailList(String name) {
 		CoreObjectNode coreObject = ComponentNodeBuilder.createCoreObject(name).get();
-		this.propertyNode.setAssignedType((TypeProvider) coreObject.getDetailListFacet());
+		if (this.propertyNode instanceof TypeUser)
+			((TypeUser) this.propertyNode).setAssignedType((TypeProvider) coreObject.getDetailListFacet());
 		return this;
 	}
 
@@ -93,13 +96,15 @@ public class PropertyNodeBuilder {
 
 	public PropertyNodeBuilder assignCoreObject(String name) {
 		CoreObjectNode coreObject = ComponentNodeBuilder.createCoreObject(name).get();
-		this.propertyNode.setAssignedType(coreObject);
+		if (this.propertyNode instanceof TypeUser)
+			((TypeUser) this.propertyNode).setAssignedType(coreObject);
 		return this;
 	}
 
 	public PropertyNodeBuilder assignBuisnessObject(String name) {
 		BusinessObjectNode business = ComponentNodeBuilder.createBusinessObject(name).get();
-		this.propertyNode.setAssignedType(business);
+		if (this.propertyNode instanceof TypeUser)
+			((TypeUser) this.propertyNode).setAssignedType(business);
 		return this;
 	}
 
@@ -108,7 +113,8 @@ public class PropertyNodeBuilder {
 	 */
 	public PropertyNodeBuilder assignVWA(String name) {
 		VWA_Node coreObject = ComponentNodeBuilder.createVWA(name).get();
-		this.propertyNode.setAssignedType(coreObject);
+		if (this.propertyNode instanceof TypeUser)
+			((TypeUser) this.propertyNode).setAssignedType(coreObject);
 		return this;
 	}
 

@@ -16,26 +16,32 @@
 package org.opentravel.schemas.node.properties;
 
 import org.eclipse.swt.graphics.Image;
+import org.opentravel.schemacompiler.model.NamedEntity;
+import org.opentravel.schemacompiler.model.TLModelElement;
 import org.opentravel.schemacompiler.model.TLProperty;
-import org.opentravel.schemas.modelObject.ElementPropertyMO;
+import org.opentravel.schemacompiler.model.TLPropertyOwner;
+import org.opentravel.schemacompiler.model.TLPropertyType;
 import org.opentravel.schemas.node.ComponentNodeType;
 import org.opentravel.schemas.node.Node;
 import org.opentravel.schemas.node.NodeEditStatus;
 import org.opentravel.schemas.node.NodeFactory;
 import org.opentravel.schemas.node.NodeNameUtils;
+import org.opentravel.schemas.node.interfaces.FacetInterface;
 import org.opentravel.schemas.node.interfaces.INode;
-import org.opentravel.schemas.node.properties.EqExOneValueHandler.ValueWithContextType;
 import org.opentravel.schemas.properties.Images;
 import org.opentravel.schemas.types.TypeProvider;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
- * A property node that represents an XML element. See {@link NodeFactory#newMember(INode, Object)}
+ * A property node that represents an XML element. See {@link NodeFactory#newMemberOLD(INode, Object)}
  * 
  * @author Dave Hollander
  * 
  */
 
-public class ElementNode extends PropertyNode {
+public class ElementNode extends TypedPropertyNode {
+	private static final Logger LOGGER = LoggerFactory.getLogger(ElementNode.class);
 
 	/**
 	 * Add an element property to a facet or extension point.
@@ -44,8 +50,10 @@ public class ElementNode extends PropertyNode {
 	 *            - if null, the caller must link the node and add to TL Model parent
 	 * @param name
 	 */
-	public ElementNode(PropertyOwnerInterface parent, String name) {
+	public ElementNode(FacetInterface parent, String name) {
 		this(parent, name, null);
+		if (parent != null)
+			changeHandler = new PropertyRoleChangeHandler(this);
 	}
 
 	/**
@@ -57,9 +65,12 @@ public class ElementNode extends PropertyNode {
 	 * @param type
 	 *            type to assign, will be set to" unassigned" if null
 	 */
-	public ElementNode(PropertyOwnerInterface parent, String name, TypeProvider type) {
-		super(new TLProperty(), (Node) parent, name, PropertyNodeType.ELEMENT);
+	public ElementNode(FacetInterface parent, String name, TypeProvider type) {
+		super(new TLProperty(), parent, name);
 		setAssignedType(type);
+		setName(name); // super.setName will not work if missing type
+		if (parent != null)
+			changeHandler = new PropertyRoleChangeHandler(this);
 	}
 
 	/**
@@ -70,15 +81,32 @@ public class ElementNode extends PropertyNode {
 	 * @param parent
 	 *            if not null, add element to the parent.
 	 */
-	public ElementNode(TLProperty tlObj, PropertyOwnerInterface parent) {
-		super(tlObj, (INode) parent, PropertyNodeType.ELEMENT);
+	public ElementNode(TLProperty tlObj, FacetInterface parent) {
+		super(tlObj, parent);
 		if (getEditStatus().equals(NodeEditStatus.MINOR))
 			setMandatory(false);
-		else if (tlObj instanceof TLProperty)
-			setMandatory(((TLProperty) tlObj).isMandatory()); // default value for properties
+		if (tlObj.getType() == null)
+			setAssignedType();
+		if (parent != null)
+			changeHandler = new PropertyRoleChangeHandler(this);
+	}
 
-		assert (tlObj instanceof TLProperty);
-		assert (modelObject instanceof ElementPropertyMO);
+	public ElementNode() {
+		super();
+		if (parent != null)
+			changeHandler = new PropertyRoleChangeHandler(this);
+	}
+
+	@Override
+	public void addToTL(final FacetInterface owner, final int index) {
+		if (owner.getTLModelObject() instanceof TLPropertyOwner)
+			try {
+				((TLPropertyOwner) owner.getTLModelObject()).addElement(index, getTLModelObject());
+			} catch (IndexOutOfBoundsException e) {
+				((TLPropertyOwner) owner.getTLModelObject()).addElement(getTLModelObject());
+			}
+		owner.getChildrenHandler().clear();
+		setParent((Node) owner);
 	}
 
 	@Override
@@ -88,46 +116,27 @@ public class ElementNode extends PropertyNode {
 
 	@Override
 	public INode createProperty(Node type) {
-		// int index = indexOfNode();
-		int tlIndex = indexOfTLProperty();
-		TLProperty tlObj = (TLProperty) cloneTLObj();
-		getTLModelObject().getOwner().addElement(tlIndex, tlObj);
-		ElementNode n = new ElementNode(tlObj, null);
-		getParent().linkChild(n, indexOfNode());
-		n.setDescription(type.getDescription());
-		if (type instanceof TypeProvider)
-			n.setAssignedType((TypeProvider) type);
-		n.setName(type.getName());
-		return n;
+		// Clone this TL Object
+		TLProperty tlClone = (TLProperty) cloneTLObj();
+		ElementNode n = new ElementNode(tlClone, null);
+		return super.createProperty(n, type);
+	}
+
+	@Override
+	public NamedEntity getAssignedTLNamedEntity() {
+		if (getTLModelObject() == null)
+			return null;
+		return getTLModelObject().getType();
+	}
+
+	@Override
+	public String getAssignedTLTypeName() {
+		return getTLModelObject() != null ? getTLModelObject().getTypeName() : "";
 	}
 
 	@Override
 	public ComponentNodeType getComponentNodeType() {
 		return ComponentNodeType.ELEMENT;
-	}
-
-	@Override
-	public String getEquivalent(String context) {
-		return getEquivalentHandler().get(context);
-	}
-
-	@Override
-	public IValueWithContextHandler getEquivalentHandler() {
-		if (equivalentHandler == null)
-			equivalentHandler = new EqExOneValueHandler(this, ValueWithContextType.EQUIVALENT);
-		return equivalentHandler;
-	}
-
-	@Override
-	public String getExample(String context) {
-		return getExampleHandler().get(context);
-	}
-
-	@Override
-	public IValueWithContextHandler getExampleHandler() {
-		if (exampleHandler == null)
-			exampleHandler = new EqExOneValueHandler(this, ValueWithContextType.EXAMPLE);
-		return exampleHandler;
 	}
 
 	@Override
@@ -138,14 +147,23 @@ public class ElementNode extends PropertyNode {
 	@Override
 	public String getLabel() {
 		String label = getName();
-		if (getType() != null)
+		if (getAssignedType() != null)
 			label += " [" + getTypeNameWithPrefix() + "]";
 		return label;
 	}
 
 	@Override
 	public String getName() {
+		if (deleted)
+			return "-d-";
+		if (getTLModelObject().getType() == null)
+			setAssignedType();
 		return emptyIfNull(getTLModelObject().getName());
+	}
+
+	@Override
+	public Node getParent() {
+		return super.getParent((TLModelElement) getTLModelObject().getOwner(), true);
 	}
 
 	public int getRepeat() {
@@ -154,7 +172,7 @@ public class ElementNode extends PropertyNode {
 
 	@Override
 	public TLProperty getTLModelObject() {
-		return (TLProperty) (modelObject != null ? modelObject.getTLModelObj() : null);
+		return (TLProperty) tlObj;
 	}
 
 	/**
@@ -162,11 +180,15 @@ public class ElementNode extends PropertyNode {
 	 */
 	@Override
 	public int indexOfTLProperty() {
+		if (getTLModelObject() == null)
+			return 0;
 		return getTLModelObject().getOwner().getElements().indexOf(getTLModelObject());
 	}
 
 	@Override
 	public boolean isMandatory() {
+		if (getTLModelObject() == null)
+			return false;
 		return getTLModelObject().isMandatory();
 	}
 
@@ -185,6 +207,7 @@ public class ElementNode extends PropertyNode {
 	/**
 	 * Allowed in major versions and on objects new in a minor.
 	 */
+	@Override
 	public void setMandatory(final boolean selection) {
 		if (isEditable_newToChain())
 			if (getOwningComponent().isNewToChain() || !getLibrary().isInChain())
@@ -193,16 +216,49 @@ public class ElementNode extends PropertyNode {
 
 	@Override
 	public void setName(String name) {
-		// modelObject.setName(name); // try the passed name
-		// modelObject.setName(NodeNameUtils.fixElementName(this)); // let utils fix it if needed.
-		// getTLModelObject().setName(name); // Must set name before the utils try to fix them.
-		getTLModelObject().setName(NodeNameUtils.fixElementName(this, name)); // let utils fix it as needed.
+		// let NodeNameUtils fix it as needed.
+		if (getTLModelObject() != null)
+			getTLModelObject().setName(NodeNameUtils.fixElementName(this, name));
 	}
 
 	public void setRepeat(final int i) {
 		if (isEditable_newToChain())
 			getTLModelObject().setRepeat(i);
 		return;
+	}
+
+	@Override
+	protected void moveDownTL() {
+		getTLModelObject().moveDown();
+	}
+
+	@Override
+	protected void moveUpTL() {
+		getTLModelObject().moveUp();
+	}
+
+	@Override
+	protected void removeFromTL() {
+		if (getParent() != null && getParent().getTLModelObject() instanceof TLPropertyOwner)
+			((TLPropertyOwner) getParent().getTLModelObject()).removeProperty(getTLModelObject());
+	}
+
+	@Override
+	public void removeAssignedTLType() {
+		setAssignedType();
+		getTLModelObject().setType(null);
+	}
+
+	@Override
+	public boolean setAssignedTLType(TLModelElement tla) {
+		if (tla == null)
+			return false; // Never override a saved type assignment
+		if (tla == getTLModelObject().getType())
+			return false;
+		if (tla instanceof TLPropertyType)
+			getTLModelObject().setType((TLPropertyType) tla);
+		setName(getName()); // fix name if needed
+		return getTLModelObject().getType() == tla;
 	}
 
 }

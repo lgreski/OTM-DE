@@ -39,27 +39,21 @@ import org.opentravel.schemacompiler.model.TLValueWithAttributes;
 import org.opentravel.schemacompiler.repository.RepositoryException;
 import org.opentravel.schemacompiler.repository.RepositoryItemState;
 import org.opentravel.schemacompiler.saver.LibrarySaveException;
-import org.opentravel.schemacompiler.validate.FindingMessageFormat;
-import org.opentravel.schemacompiler.validate.ValidationFindings;
-import org.opentravel.schemas.controllers.DefaultProjectController;
-import org.opentravel.schemas.controllers.MainController;
-import org.opentravel.schemas.controllers.repository.RepositoryIntegrationTestBase;
-import org.opentravel.schemas.node.facets.RoleFacetNode;
-import org.opentravel.schemas.node.interfaces.Enumeration;
 import org.opentravel.schemas.node.interfaces.ExtensionOwner;
 import org.opentravel.schemas.node.interfaces.VersionedObjectInterface;
 import org.opentravel.schemas.node.libraries.LibraryChainNode;
 import org.opentravel.schemas.node.libraries.LibraryNode;
 import org.opentravel.schemas.node.listeners.NodeIdentityListener;
-import org.opentravel.schemas.node.properties.AttributeNode;
 import org.opentravel.schemas.node.properties.ElementNode;
-import org.opentravel.schemas.node.properties.ElementReferenceNode;
-import org.opentravel.schemas.node.properties.IndicatorNode;
 import org.opentravel.schemas.node.properties.PropertyNode;
-import org.opentravel.schemas.node.properties.PropertyOwnerInterface;
-import org.opentravel.schemas.node.properties.RoleNode;
-import org.opentravel.schemas.testUtils.LoadFiles;
-import org.opentravel.schemas.testUtils.MockLibrary;
+import org.opentravel.schemas.node.typeProviders.ChoiceObjectNode;
+import org.opentravel.schemas.node.typeProviders.EnumerationClosedNode;
+import org.opentravel.schemas.node.typeProviders.EnumerationOpenNode;
+import org.opentravel.schemas.node.typeProviders.SimpleTypeNode;
+import org.opentravel.schemas.node.typeProviders.VWA_Node;
+import org.opentravel.schemas.node.typeProviders.facetOwners.BusinessObjectNode;
+import org.opentravel.schemas.node.typeProviders.facetOwners.CoreObjectNode;
+import org.opentravel.schemas.testUtils.BaseRepositoryTest;
 import org.opentravel.schemas.testUtils.NodeTesters;
 import org.opentravel.schemas.testUtils.NodeTesters.TestNode;
 import org.opentravel.schemas.trees.repository.RepositoryNode;
@@ -74,27 +68,28 @@ import org.slf4j.LoggerFactory;
  * @author Dave Hollander
  * 
  */
-public class NewComponent_Tests extends RepositoryIntegrationTestBase {
+public class NewComponent_Tests extends BaseRepositoryTest {
 	private final static Logger LOGGER = LoggerFactory.getLogger(NewComponent_Tests.class);
 
 	TestNode nt = new NodeTesters().new TestNode();
 	ModelNode model = null;
 	TestNode tn = new NodeTesters().new TestNode();
-	LoadFiles lf = new LoadFiles();
-	LibraryTests lt = new LibraryTests();
-	MockLibrary ml = null;
-	LibraryNode ln = null;
-	MainController mc;
-	DefaultProjectController pc;
-	ProjectNode defaultProject;
+
+	// LoadFiles lf = new LoadFiles();
+	Library_FunctionTests lt = new Library_FunctionTests();
+	// MockLibrary ml = null;
+	// LibraryNode ln = null;
+	// MainController mc;
+	// DefaultProjectController pc;
+	// ProjectNode defaultProject;
 	EditNode en;
 
 	@Before
 	public void beforeAllTests() {
-		mc = new MainController();
-		ml = new MockLibrary();
-		pc = (DefaultProjectController) mc.getProjectController();
-		defaultProject = pc.getDefaultProject();
+		// mc = OtmRegistry.getMainController();
+		// ml = new MockLibrary();
+		// pc = (DefaultProjectController) mc.getProjectController();
+		// defaultProject = pc.getDefaultProject();
 
 		en = new EditNode(ln);
 		en.setName("SOME_Component");
@@ -103,14 +98,14 @@ public class NewComponent_Tests extends RepositoryIntegrationTestBase {
 	}
 
 	public NewComponent_Tests() {
-		mc = new MainController();
-		lf = new LoadFiles();
+		// mc = OtmRegistry.getMainController();
+		// lf = new LoadFiles();
 	}
 
 	@Test
 	public void newComponentTests() throws Exception {
-		MainController mc = new MainController();
-		LoadFiles lf = new LoadFiles();
+		// MainController mc = OtmRegistry.getMainController();
+		// LoadFiles lf = new LoadFiles();
 		LibraryNode noService = lf.loadFile2(mc);
 		LibraryNode hasService = lf.loadFile1(mc);
 
@@ -142,8 +137,8 @@ public class NewComponent_Tests extends RepositoryIntegrationTestBase {
 		boolean locked = rc.lock(chain.getHead());
 		assertTrue("Repository must successfully lock library.", locked);
 		assertTrue("Library in repo must be editable.", majorLibrary.isEditable());
-		assertTrue("Head library must be managed WIP.", RepositoryItemState.MANAGED_WIP == chain.getHead()
-				.getProjectItem().getState());
+		assertTrue("Head library must be managed WIP.",
+				RepositoryItemState.MANAGED_WIP == chain.getHead().getProjectItem().getState());
 		LOGGER.debug("Managed major library in repository.");
 
 		// Given - an unmanaged Library to contain objects created to be extended.
@@ -159,7 +154,7 @@ public class NewComponent_Tests extends RepositoryIntegrationTestBase {
 		ml.addEP(ln, eln); // add ep to ln referencing BO in eln
 		// Then - must be valid extension
 		testExtension(ln, eln);
-		checkValid(chain);
+		ml.check(chain);
 
 		String ns1 = ln.getNamespace();
 		String ns2 = majorLibrary.getNamespace();
@@ -171,7 +166,7 @@ public class NewComponent_Tests extends RepositoryIntegrationTestBase {
 		ml.addEP(majorLibrary, eln);
 		// Then - must be valid extension
 		testExtension(majorLibrary, eln);
-		checkValid(chain);
+		ml.check(chain);
 
 		// FIXME
 		// The library must be managed to be promoted or versioned.
@@ -194,16 +189,16 @@ public class NewComponent_Tests extends RepositoryIntegrationTestBase {
 		// checkValid(chain);
 	}
 
-	private void checkValid(Node chain) {
-		LibraryChainNode cn = chain.getChain();
-		if (cn.isValid())
-			return;
-		ValidationFindings findings = cn.validate();
-		for (String f : findings.getAllValidationMessages(FindingMessageFormat.IDENTIFIED_FORMAT)) {
-			LOGGER.debug("Finding: " + f);
-		}
-		Assert.assertTrue(cn.isValid());
-	}
+	// private void checkValid(Node chain) {
+	// LibraryChainNode cn = chain.getChain();
+	// if (cn.isValid())
+	// return;
+	// ValidationFindings findings = cn.validate();
+	// for (String f : findings.getAllValidationMessages(FindingMessageFormat.IDENTIFIED_FORMAT)) {
+	// LOGGER.debug("Finding: " + f);
+	// }
+	// Assert.assertTrue(cn.isValid());
+	// }
 
 	@Override
 	public RepositoryNode getRepositoryForTest() {
@@ -224,7 +219,7 @@ public class NewComponent_Tests extends RepositoryIntegrationTestBase {
 	 *            library containing the referenced object
 	 */
 	private void testExtension(LibraryNode ln, LibraryNode eln) {
-		List<Node> namedTypes = ln.getDescendants_LibraryMembers();
+		List<Node> namedTypes = ln.getDescendants_LibraryMembersAsNodes();
 		for (Node n : namedTypes) {
 			// Then - the EP exists
 			// Then - the EP has a referenced object
@@ -245,7 +240,7 @@ public class NewComponent_Tests extends RepositoryIntegrationTestBase {
 	}
 
 	private void testNewVersion(LibraryNode ln, LibraryNode major) {
-		List<Node> namedTypes = major.getDescendants_LibraryMembers();
+		List<Node> namedTypes = major.getDescendants_LibraryMembersAsNodes();
 		for (Node n : namedTypes) {
 			if (n instanceof VersionedObjectInterface) {
 				LOGGER.debug("Version Extension owner: " + n);
@@ -274,15 +269,15 @@ public class NewComponent_Tests extends RepositoryIntegrationTestBase {
 		assert string.getNode(string.getTLModelObject().getListeners()) == string;
 
 		// Check to assure one and only one listener is created with each node
-		BusinessObjectNode bo = (BusinessObjectNode) NodeFactory.newComponent(new TLBusinessObject());
+		BusinessObjectNode bo = (BusinessObjectNode) NodeFactory.newLibraryMember(new TLBusinessObject());
 		assert hasOneNamedTypeListener(bo);
 		bo.setName("BO");
 		ln.addMember(bo);
 		assert hasOneNamedTypeListener(bo);
 		assert bo.getNode(bo.getTLModelObject().getListeners()) == bo;
-		assert bo.getNode(((Node) bo.getIDFacet()).getTLModelObject().getListeners()) == bo.getIDFacet();
+		assert bo.getNode(((Node) bo.getFacet_ID()).getTLModelObject().getListeners()) == bo.getFacet_ID();
 
-		CoreObjectNode core = (CoreObjectNode) NodeFactory.newComponent(new TLCoreObject());
+		CoreObjectNode core = (CoreObjectNode) NodeFactory.newLibraryMember(new TLCoreObject());
 		assert hasOneNamedTypeListener(core);
 		core.setName("CO");
 		ln.addMember(core);
@@ -291,35 +286,35 @@ public class NewComponent_Tests extends RepositoryIntegrationTestBase {
 		assert core.getNode(((Node) core.getFacet_Summary()).getTLModelObject().getListeners()) == core
 				.getFacet_Summary();
 
-		VWA_Node vwa = (VWA_Node) NodeFactory.newComponent(new TLValueWithAttributes());
+		VWA_Node vwa = (VWA_Node) NodeFactory.newLibraryMember(new TLValueWithAttributes());
 		assert hasOneNamedTypeListener(vwa);
 		vwa.setName("VWA");
 		ln.addMember(vwa);
 		assert hasOneNamedTypeListener(vwa);
 		assert vwa.getNode(vwa.getTLModelObject().getListeners()) == vwa;
 
-		ChoiceObjectNode choice = (ChoiceObjectNode) NodeFactory.newComponent(new TLChoiceObject());
+		ChoiceObjectNode choice = (ChoiceObjectNode) NodeFactory.newLibraryMember(new TLChoiceObject());
 		assert hasOneNamedTypeListener(choice);
 		choice.setName("Choice");
 		ln.addMember(choice);
 		assert hasOneNamedTypeListener(choice);
 		assert choice.getNode(choice.getTLModelObject().getListeners()) == choice;
 
-		SimpleTypeNode simple = (SimpleTypeNode) NodeFactory.newComponent(new TLSimple());
+		SimpleTypeNode simple = (SimpleTypeNode) NodeFactory.newLibraryMember(new TLSimple());
 		assert hasOneNamedTypeListener(simple);
 		simple.setName("Simple");
 		ln.addMember(simple);
 		assert hasOneNamedTypeListener(simple);
 		assert simple.getNode(simple.getTLModelObject().getListeners()) == simple;
 
-		EnumerationClosedNode ec = (EnumerationClosedNode) NodeFactory.newComponent(new TLClosedEnumeration());
+		EnumerationClosedNode ec = (EnumerationClosedNode) NodeFactory.newLibraryMember(new TLClosedEnumeration());
 		assert hasOneNamedTypeListener(ec);
 		ec.setName("ec");
 		ln.addMember(ec);
 		assert hasOneNamedTypeListener(ec);
 		assert ec.getNode(ec.getTLModelObject().getListeners()) == ec;
 
-		EnumerationOpenNode eo = (EnumerationOpenNode) NodeFactory.newComponent(new TLOpenEnumeration());
+		EnumerationOpenNode eo = (EnumerationOpenNode) NodeFactory.newLibraryMember(new TLOpenEnumeration());
 		assert hasOneNamedTypeListener(eo);
 		eo.setName("eo");
 		ln.addMember(eo);
@@ -327,7 +322,7 @@ public class NewComponent_Tests extends RepositoryIntegrationTestBase {
 		assert eo.getNode(eo.getTLModelObject().getListeners()) == eo;
 
 		// TODO - other property types
-		PropertyNode p1 = new ElementNode(bo.getIDFacet(), "i1");
+		PropertyNode p1 = new ElementNode(bo.getFacet_ID(), "i1");
 		assert hasOneNamedTypeListener(p1);
 		assert p1.getNode(p1.getTLModelObject().getListeners()) == p1;
 	}
@@ -443,34 +438,34 @@ public class NewComponent_Tests extends RepositoryIntegrationTestBase {
 	// nt.visit(newOne);
 	// }
 
-	private void addProperties(ComponentNode n) {
-		Assert.assertNotNull(n.getFacet_Summary());
-		PropertyOwnerInterface po = (PropertyOwnerInterface) n.getFacet_Summary();
-
-		PropertyNode pne = new ElementNode(po, "Property");
-		PropertyNode pna = new AttributeNode(po, "Attribute");
-		PropertyNode pni = new IndicatorNode(po, "Indicator");
-		PropertyNode pner = new ElementReferenceNode(po, "EleRef");
-		Assert.assertEquals(4, n.getFacet_Summary().getChildren().size());
-	}
-
-	private void addRoles(CoreObjectNode n) {
-		RoleFacetNode rf = n.getRoleFacet();
-		Assert.assertNotNull(rf);
-		PropertyNode pnr1 = new RoleNode(rf, "Role1");
-		PropertyNode pnr2 = new RoleNode(rf, "Role2");
-		PropertyNode pnr3 = new RoleNode(rf, "Role3");
-		Assert.assertEquals(3, n.getRoleFacet().getChildren().size());
-	}
-
-	private void addLiterals(Node n) {
-		Assert.assertNotNull(n);
-		if (n instanceof Enumeration) {
-			((Enumeration) n).addLiteral("lit1");
-			((Enumeration) n).addLiteral("lit2");
-			((Enumeration) n).addLiteral("lit3");
-		}
-		Assert.assertEquals(3, n.getChildren().size());
-	}
+	// private void addProperties(ComponentNode n) {
+	// Assert.assertNotNull(n.getFacet_Summary());
+	// FacetInterface po = n.getFacet_Summary();
+	//
+	// PropertyNode pne = new ElementNode(po, "Property");
+	// PropertyNode pna = new AttributeNode(po, "Attribute");
+	// PropertyNode pni = new IndicatorNode(po, "Indicator");
+	// PropertyNode pner = new ElementReferenceNode(po);
+	// Assert.assertEquals(4, n.getFacet_Summary().getChildren().size());
+	// }
+	//
+	// private void addRoles(CoreObjectNode n) {
+	// RoleFacetNode rf = n.getFacet_Role();
+	// Assert.assertNotNull(rf);
+	// PropertyNode pnr1 = new RoleNode(rf, "Role1");
+	// PropertyNode pnr2 = new RoleNode(rf, "Role2");
+	// PropertyNode pnr3 = new RoleNode(rf, "Role3");
+	// Assert.assertEquals(3, n.getFacet_Role().getChildren().size());
+	// }
+	//
+	// private void addLiterals(Node n) {
+	// Assert.assertNotNull(n);
+	// if (n instanceof Enumeration) {
+	// ((Enumeration) n).addLiteral("lit1");
+	// ((Enumeration) n).addLiteral("lit2");
+	// ((Enumeration) n).addLiteral("lit3");
+	// }
+	// Assert.assertEquals(3, n.getChildren().size());
+	// }
 
 }

@@ -22,18 +22,20 @@ import org.eclipse.core.commands.ExecutionEvent;
 import org.eclipse.core.commands.ExecutionException;
 import org.eclipse.jface.resource.ImageDescriptor;
 import org.eclipse.swt.widgets.Event;
+import org.opentravel.schemacompiler.model.TLFacetType;
 import org.opentravel.schemas.node.ComponentNode;
-import org.opentravel.schemas.node.CoreObjectNode;
 import org.opentravel.schemas.node.Node;
 import org.opentravel.schemas.node.ServiceNode;
-import org.opentravel.schemas.node.facets.FacetNode;
-import org.opentravel.schemas.node.facets.OperationNode;
-import org.opentravel.schemas.node.facets.RoleFacetNode;
 import org.opentravel.schemas.node.interfaces.Enumeration;
+import org.opentravel.schemas.node.interfaces.FacetInterface;
 import org.opentravel.schemas.node.interfaces.INode;
+import org.opentravel.schemas.node.objectMembers.FacetOMNode;
+import org.opentravel.schemas.node.objectMembers.OperationNode;
 import org.opentravel.schemas.node.properties.EnumLiteralNode;
 import org.opentravel.schemas.node.properties.PropertyNode;
 import org.opentravel.schemas.node.properties.PropertyNodeType;
+import org.opentravel.schemas.node.typeProviders.RoleFacetNode;
+import org.opentravel.schemas.node.typeProviders.facetOwners.CoreObjectNode;
 import org.opentravel.schemas.properties.ExternalizedStringProperties;
 import org.opentravel.schemas.properties.Images;
 import org.opentravel.schemas.properties.Messages;
@@ -51,12 +53,16 @@ import org.opentravel.schemas.wizards.validators.NewPropertyValidator;
  * 
  * Handles action: org.opentravel.schemas.commands.AddProperties
  * 
- * Enabled by stl2Developer.selection.canAdd in org.opentravel.schemas.testers.GlobalSelectionTester which calls
- * isEnabled_AddProperties()
  * 
  * @author Dave Hollander
  *
  */
+
+//
+// dmh - 3/23/2018 - moved control here and commented out section in plugin.xml
+// Was Enabled by stl2Developer.selection.canAdd in org.opentravel.schemas.testers.GlobalSelectionTester which calls
+// isEnabled_AddProperties()
+//
 public class AddNodeHandler2 extends OtmAbstractHandler {
 	// private static final Logger LOGGER = LoggerFactory.getLogger(AddNodeHandler2.class);
 	public static String COMMAND_ID = "org.opentravel.schemas.commands.Add";
@@ -65,7 +71,6 @@ public class AddNodeHandler2 extends OtmAbstractHandler {
 	private ComponentNode actOnNode; // The node to perform the action on.
 
 	public void execute(Event event) {
-		mc = OtmRegistry.getMainController();
 		selectedNode = mc.getGloballySelectNode();
 		actOnNode = (ComponentNode) selectedNode;
 		if (event.data instanceof ComponentNode)
@@ -78,12 +83,17 @@ public class AddNodeHandler2 extends OtmAbstractHandler {
 	// execute target for Add button
 	@Override
 	public Object execute(ExecutionEvent exEvent) throws ExecutionException {
-		mc = OtmRegistry.getMainController();
 		selectedNode = mc.getGloballySelectNode();
 		actOnNode = (ComponentNode) selectedNode;
 		runCommand(getActionType(exEvent));
 		mc.postStatus("Add Property Handler added the property.");
 		return null;
+	}
+
+	// dmh - 3/23/2018 - moved control here and commented out section in plugin.xml
+	@Override
+	public boolean isEnabled() {
+		return getFirstSelected() != null ? getFirstSelected().isEnabled_AddProperties() : false;
 	}
 
 	// for enabled status, see GlobalSelectionTester.canAdd()
@@ -120,7 +130,7 @@ public class AddNodeHandler2 extends OtmAbstractHandler {
 		// if needed, create minor version of object
 		if (targetNode.getChain() != null) {
 			if (targetNode.isEnabled_AddProperties() && !targetNode.isInHead())
-				newNode = createVersionExtension(targetNode.getOwningComponent());
+				newNode = createVersionExtension((Node) targetNode.getOwningComponent());
 			if (newNode == null)
 				return; // they did a cancel
 
@@ -132,8 +142,10 @@ public class AddNodeHandler2 extends OtmAbstractHandler {
 				if (targetNode instanceof PropertyNode)
 					targetNode = (ComponentNode) targetNode.getParent();
 
+				// FIXME - OMNode is wrong class!
+
 				// find matching facet
-				if (targetNode instanceof FacetNode)
+				if (targetNode instanceof FacetOMNode)
 					for (Node n : newNode.getChildren())
 						if (n.getName().equals(targetNode.getName())) {
 							newNode = (ComponentNode) n;
@@ -155,9 +167,10 @@ public class AddNodeHandler2 extends OtmAbstractHandler {
 		}
 
 		// make summary facet properties default to mandatory unless in minor version
-		FacetNode owningFacet = (FacetNode) newNode.getParent();
-		if (owningFacet.isSummaryFacet() && !newNode.getLibrary().isMinorVersion())
-			newNode.setMandatory(true);
+		FacetInterface owningFacet = (FacetInterface) newNode.getParent();
+		if (owningFacet.isFacet(TLFacetType.SUMMARY) && !newNode.getLibrary().isMinorVersion())
+			if (newNode instanceof PropertyNode)
+				((PropertyNode) newNode).setMandatory(true);
 
 		mc.refresh(newNode);
 		OtmRegistry.getNavigatorView().refresh();
@@ -166,7 +179,7 @@ public class AddNodeHandler2 extends OtmAbstractHandler {
 	private void runCommand(PropertyNodeType actionType) {
 		INode.CommandType type = selectedNode.getAddCommand();
 		if (selectedNode instanceof CoreObjectNode && actionType == PropertyNodeType.ROLE)
-			type = INode.CommandType.ROLE;
+			type = INode.CommandType.ROLE; // TODO - remove/refactor
 
 		switch (type) {
 		case ROLE:
@@ -189,16 +202,17 @@ public class AddNodeHandler2 extends OtmAbstractHandler {
 	}
 
 	/**
-	 * Add a user define role to this node. Does nothing if the node, children or siblings are not a role facet.
-	 * 
-	 * @param curNode
-	 *            - core object or one of its facets or properties.
+	 * Add user defined roles.
+	 * <p>
+	 * Global <i>actOnNode</i> must be a role facet or the owner must be a core object.
 	 */
 	public void addRoleToNode() {
-		if (actOnNode == null || !(actOnNode instanceof CoreObjectNode))
-			return; // should this post status or dialog?
-		RoleFacetNode roleFacet = ((CoreObjectNode) actOnNode).getRoleFacet();
-		if (roleFacet == null)
+		RoleFacetNode roleFacet = null;
+		if (actOnNode instanceof RoleFacetNode)
+			roleFacet = (RoleFacetNode) actOnNode;
+		else if (actOnNode.getOwningComponent() instanceof CoreObjectNode)
+			roleFacet = ((CoreObjectNode) actOnNode.getOwningComponent()).getFacet_Role();
+		if (!(roleFacet instanceof RoleFacetNode))
 			return;
 
 		// If GUI allows adding roles, but the node is not in the head library
@@ -206,7 +220,7 @@ public class AddNodeHandler2 extends OtmAbstractHandler {
 			actOnNode = createVersionExtension(actOnNode);
 			if (actOnNode == null)
 				return; // should this post status or dialog?
-			roleFacet = ((CoreObjectNode) actOnNode).getRoleFacet();
+			roleFacet = ((CoreObjectNode) actOnNode).getFacet_Role();
 		}
 
 		final SimpleNameWizard wizard = new SimpleNameWizard(new ExternalizedStringProperties("action.addRole"), 10);
@@ -225,7 +239,8 @@ public class AddNodeHandler2 extends OtmAbstractHandler {
 		}
 		ServiceNode svc = (ServiceNode) actOnNode;
 		SimpleNameWizard wizard = new SimpleNameWizard("wizard.newOperation");
-		wizard.setValidator(new NewNodeNameValidator(svc, wizard, Messages.getString("wizard.newOperation.error.name")));
+		wizard.setValidator(
+				new NewNodeNameValidator(svc, wizard, Messages.getString("wizard.newOperation.error.name")));
 		wizard.run(OtmRegistry.getActiveShell());
 		if (!wizard.wasCanceled()) {
 			new OperationNode(svc, wizard.getText());
@@ -277,7 +292,7 @@ public class AddNodeHandler2 extends OtmAbstractHandler {
 			w2.setValidator(new NewPropertyValidator(actOnNode, null));
 			w2.run(OtmRegistry.getActiveShell());
 		} catch (IllegalArgumentException e) {
-			DialogUserNotifier.openError("Add properties error.", e.getLocalizedMessage());
+			DialogUserNotifier.openError("Add properties error.", e.getLocalizedMessage(), e);
 			// LOGGER.error("ERROR: " + e);
 		}
 		mc.refresh(actOnNode.getOwningComponent());
@@ -289,7 +304,7 @@ public class AddNodeHandler2 extends OtmAbstractHandler {
 	}
 
 	protected Node getSelectedNode(ExecutionEvent exEvent) {
-		return mc.getGloballySelectNode();
+		return mc != null ? mc.getGloballySelectNode() : null;
 	}
 
 	public static ImageDescriptor getIcon() {

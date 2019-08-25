@@ -18,6 +18,7 @@ package org.opentravel.schemas.stl2developer;
 import org.eclipse.jface.dialogs.IDialogConstants;
 import org.eclipse.jface.dialogs.MessageDialog;
 import org.eclipse.swt.widgets.Display;
+import org.opentravel.schemas.properties.Messages;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -34,19 +35,43 @@ public class DialogUserNotifier {
 		MessageDialog.openWarning(OtmRegistry.getActiveShell(), title, message);
 	}
 
+	// TODO - use OpenInformationMsg instead of this
 	public static void openInformation(final String title, final String message) {
 		if (!OtmRegistry.getMainWindow().hasDisplay())
 			return;
-
 		MessageDialog.openInformation(OtmRegistry.getActiveShell(), title, message);
 	}
 
-	public static void openError(final String title, final String message) {
-		if (!OtmRegistry.getMainWindow().hasDisplay()) {
-			LOGGER.warn("Error Dialog: " + message);
+	/**
+	 * Open information dialog using the title and message defined in messages.properties
+	 * 
+	 * @param title
+	 * @param message
+	 */
+	public static void openInformationMsg(final String title, final String message) {
+		if (!OtmRegistry.getMainWindow().hasDisplay())
 			return;
-		}
-		MessageDialog.openError(OtmRegistry.getActiveShell(), title, message);
+		MessageDialog.openInformation(OtmRegistry.getActiveShell(), Messages.getString(title),
+				Messages.getString(message));
+	}
+
+	// // Please pass exception or null to openError()
+	// @Deprecated
+	// public static void openError(final String title, final String message) {
+	// if (!OtmRegistry.getMainWindow().hasDisplay()) {
+	// LOGGER.warn("Error DialogX: " + message);
+	// return;
+	// }
+	// MessageDialog.openError(OtmRegistry.getActiveShell(), title, message);
+	// }
+
+	public static void openError(final String title, final String message, final Throwable e) {
+		LOGGER.warn("Error Dialog: " + message);
+		if (e != null)
+			e.printStackTrace();
+
+		if (OtmRegistry.getMainWindow().hasDisplay())
+			MessageDialog.openError(OtmRegistry.getActiveShell(), title, message);
 	}
 
 	/**
@@ -79,8 +104,9 @@ public class DialogUserNotifier {
 		if (!OtmRegistry.getMainWindow().hasDisplay())
 			return 2;
 		final MessageDialog dg = new MessageDialog(OtmRegistry.getActiveShell(), title, null, question,
-				MessageDialog.QUESTION_WITH_CANCEL, new String[] { IDialogConstants.YES_LABEL,
-						IDialogConstants.NO_LABEL, IDialogConstants.CANCEL_LABEL }, 0);
+				MessageDialog.QUESTION_WITH_CANCEL,
+				new String[] { IDialogConstants.YES_LABEL, IDialogConstants.NO_LABEL, IDialogConstants.CANCEL_LABEL },
+				0);
 		return dg.open();
 	}
 
@@ -106,6 +132,7 @@ public class DialogUserNotifier {
 	 */
 	public static void syncWithUi(final String msg) {
 		Display.getDefault().asyncExec(new Runnable() {
+			@Override
 			public void run() {
 				OtmRegistry.getMainController().postStatus(msg);
 				OtmRegistry.getMainController().refresh();
@@ -113,11 +140,22 @@ public class DialogUserNotifier {
 		});
 	}
 
-	public static void syncErrorWithUi(final String msg) {
+	// public static void syncErrorWithUi(final String msg) {
+	// Display.getDefault().asyncExec(new Runnable() {
+	// @Override
+	// public void run() {
+	// if (!msg.isEmpty())
+	// openError("Error", msg);
+	// }
+	// });
+	// }
+
+	public static void syncErrorWithUi(final String msg, final Throwable e) {
 		Display.getDefault().asyncExec(new Runnable() {
+			@Override
 			public void run() {
 				if (!msg.isEmpty())
-					openError("Error", msg);
+					openError("Error", msg, e);
 			}
 		});
 	}

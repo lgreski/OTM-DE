@@ -17,8 +17,8 @@ package org.opentravel.schemas.actions;
 
 import org.eclipse.swt.widgets.Event;
 import org.opentravel.schemas.commands.AddNodeHandler2;
-import org.opentravel.schemas.node.Node;
 import org.opentravel.schemas.node.interfaces.Enumeration;
+import org.opentravel.schemas.node.interfaces.LibraryMemberInterface;
 import org.opentravel.schemas.properties.ExternalizedStringProperties;
 import org.opentravel.schemas.properties.StringProperties;
 import org.opentravel.schemas.stl2developer.MainWindow;
@@ -41,19 +41,12 @@ public class AddEnumValueAction extends OtmAbstractAction {
 	@Override
 	public void runWithEvent(Event event) {
 		new AddNodeHandler2().execute(event);
-
-		// getMainController().runAddProperties(event);
 	}
 
 	@Override
 	public boolean isEnabled() {
-		Node n = mc.getCurrentNode_NavigatorView().getOwningComponent();
-		// boolean result = n.isEnabled_AddProperties();
+		LibraryMemberInterface n = mc.getCurrentNode_NavigatorView().getOwningComponent();
 		return n instanceof Enumeration ? n.isEnabled_AddProperties() : false;
-
-		// if (getMainController().getCurrentNode_NavigatorView() instanceof EnumLiteralNode)
-		// return true;
-		// return (getMainController().getCurrentNode_NavigatorView() instanceof Enumeration) ? true : false;
 	}
 
 }

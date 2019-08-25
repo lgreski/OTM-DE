@@ -15,22 +15,17 @@
  */
 package org.opentravel.schemas.node;
 
-import org.opentravel.schemacompiler.model.TLModelElement;
 import org.opentravel.schemas.node.Node.NodeVisitor;
-import org.opentravel.schemas.node.facets.ContextualFacetNode;
-import org.opentravel.schemas.node.interfaces.Enumeration;
 import org.opentravel.schemas.node.interfaces.INode;
 import org.opentravel.schemas.node.interfaces.LibraryMemberInterface;
 import org.opentravel.schemas.node.libraries.LibraryNode;
-import org.opentravel.schemas.node.listeners.ListenerFactory;
-import org.opentravel.schemas.node.properties.AttributeNode;
-import org.opentravel.schemas.node.properties.ElementNode;
-import org.opentravel.schemas.node.properties.ElementReferenceNode;
-import org.opentravel.schemas.node.properties.IndicatorElementNode;
-import org.opentravel.schemas.node.properties.IndicatorNode;
 import org.opentravel.schemas.node.resources.ResourceNode;
+import org.opentravel.schemas.node.typeProviders.ContextualFacetNode;
+import org.opentravel.schemas.node.typeProviders.ImpliedNode;
 import org.opentravel.schemas.types.TypeProvider;
 import org.opentravel.schemas.types.TypeUser;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Node visitors for generic, commonly used functions.
@@ -41,13 +36,15 @@ import org.opentravel.schemas.types.TypeUser;
  * 
  */
 public class NodeVisitors {
-	// private static final Logger LOGGER = LoggerFactory.getLogger(NodeVisitors.class);
+	private static final Logger LOGGER = LoggerFactory.getLogger(NodeVisitors.class);
 
 	/**
-	 * Close this node. Do not change the model. Does delete type assignments. Does not delete children nor change view
-	 * contents. Use delete visitor if changes are to be made to the TL model.
-	 * 
-	 * NOTE: not version safe
+	 * Close this node visitors for closing objects with children. Close removes from model but does not modify
+	 * contents. Does remove type assignments. Does not change the underlying TL model, delete children or change view
+	 * contents.
+	 * <p>
+	 * Use delete visitor if changes are to be made to the TL model. Sample Usage: NodeVisitor visitor = new
+	 * NodeVisitors().new validateNodeTypes(); curNode.visitAllNodes(visitor);
 	 * 
 	 * @author Dave Hollander
 	 * 
@@ -57,27 +54,40 @@ public class NodeVisitors {
 		@Override
 		public void visit(INode n) {
 			// LOGGER.debug("CloseVisitor: closing " + n);
+			if (n == null)
+				return;
 			Node node = (Node) n;
 
 			// Use override behavior because Library nodes must clear out context.
 			if (node instanceof LibraryNode)
-				((LibraryNode) node).close(); // libraries may or may not do members
+				if (node.getParent() != null) {
+					LOGGER.warn("Invalid visit - libraries with parents should not be closed.");
+					assert false;
+				} else
+					((LibraryNode) node).close(); // libraries may or may not do members
 
 			if (node instanceof ContextualFacetNode)
 				((ContextualFacetNode) node).close();
-			// LOGGER.debug("Closing contextual facet: " + node);
+
+			if (node instanceof VersionNode)
+				((VersionNode) node).close();
+
+			// if (node instanceof ServiceNode)
+			// LOGGER.debug("Service node - parent is: " + node.getParent());
+
+			// Remove from where used list
+			if (node instanceof TypeProvider)
+				((TypeProvider) node).removeAll(false);
+
+			if (node instanceof TypeUser)
+				((TypeUser) node).setAssignedType();
 
 			// Unlink from tree
 			node.deleted = true;
-			if (node.getParent() != null && node.getParent().getChildren() != null)
-				node.getParent().getChildren().remove(node);
-			// else
-			// LOGGER.debug("Could not remove " + node + " from parent.");
+			if (node.getParent() != null && node.getParent().getChildrenHandler() != null)
+				node.getParent().getChildrenHandler().clear(node);
 
 			node.setParent(null);
-			node.setLibrary(null);
-
-			// LOGGER.debug("CloseVisitor: closed  " + n);
 		}
 	}
 
@@ -94,57 +104,55 @@ public class NodeVisitors {
 		public void visit(INode n) {
 			// LOGGER.debug("DeleteVisitor: deleting " + n);
 			Node node = (Node) n;
-			String nodeName = n.getName();
 
-			if ((node instanceof ServiceNode) && node.getLibrary().isInChain()) {
-				// this has a entry in the service aggregate but no version node!
-				// LOGGER.debug("Deleting Service aggregate node.");
-				node.getLibrary().getChain().removeAggregate((ComponentNode) node);
+			if (node instanceof ImpliedNode)
+				return;
+			if (node instanceof ServiceNode) {
+				node.delete();
+				return;
 			} else if (node instanceof ResourceNode) {
 				node.delete(); // resource will do children, type users and chain
 				return;
 			}
 			// NOTE - libraries are ALWAYS delete-able even when not edit-able
 			if (!node.isDeleteable()) {
-				// LOGGER.debug("DeleteVisitor: not delete-able " + n);
+				// LOGGER.debug("Exit - not delete-able " + n);
 				return;
 			}
 
+			node.deleted = true;
+
 			// Remove from where used list
 			if (node instanceof TypeProvider)
-				((TypeProvider) node).removeAll();
+				((TypeProvider) node).removeAll(true);
 
 			if (node instanceof TypeUser)
 				((TypeUser) node).setAssignedType();
 
 			// Use override behavior because Library nodes must clear out project and context.
-			if (n instanceof LibraryNode)
+			if (n instanceof LibraryNode) {
+				// You can't just delete libraries without knowing their context (LibraryOwner)
+				if (n.getParent() != null)
+					assert false;
 				((LibraryNode) n).delete(false); // just the library, not its members
+			}
 
 			// Remove from version aggregate
 			if (node.getVersionNode() != null)
 				node.getVersionNode().remove(node);
 
 			// Unlink from tree
-			node.deleted = true;
-			if (node.getParent() != null)
-				node.getParent().remove(node);
-			// else
-			// LOGGER.warn("Warning, tried to delete " + node + " with no parent--skipped remove().");
+			if (node.getParent() != null && node.getParent().getChildrenHandler() != null)
+				node.getParent().getChildrenHandler().clear(node);
+
+			// Remove the TL entity from the TL Model.
+			node.deleteTL();
 
 			node.setParent(null);
 			if (node instanceof LibraryMemberInterface)
-				node.setLibrary(null);
+				((LibraryMemberInterface) node).setLibrary(null);
 
-			// Remove the TL entity from the TL Model.
-			if (node.modelObject != null) {
-				TLModelElement tlObj = node.getTLModelObject();
-				node.modelObject.delete();
-				ListenerFactory.clearListners(tlObj); // remove any listeners
-				// LOGGER.debug("DeleteVisitor: deleted tl object " + node);
-			}
-
-			// LOGGER.debug("DeleteVisitor: deleted  " + nodeName);
+			// LOGGER.debug("DeleteVisitor: deleted " + nodeName);
 		}
 	}
 
@@ -154,36 +162,15 @@ public class NodeVisitors {
 	 * @author Dave Hollander
 	 * 
 	 */
-	@Deprecated
 	public class FixNames implements NodeVisitor {
 		// FIXME - should not be needed. the node name utils are embedded in node name setters now (11/2016)
 		@Override
 		public void visit(INode in) {
 			Node n = (Node) in;
-			if (n instanceof ElementNode)
-				n.setName(n.getName());
-			else if (n instanceof AttributeNode)
-				n.setName(n.getName());
-			else if (n instanceof IndicatorNode)
-				n.setName(n.getName());
-			else if (n instanceof Enumeration)
-				n.setName(n.getName());
-			else if (n instanceof SimpleComponentNode)
-				n.setName(n.getName());
-			else if (n instanceof VWA_Node)
-				n.setName(n.getName());
-			else if (n instanceof CoreObjectNode)
-				n.setName(n.getName());
-			else if (n instanceof BusinessObjectNode)
-				n.setName(n.getName());
-			else if (n instanceof AliasNode)
-				n.setName(n.getName());
-			else if (n instanceof IndicatorElementNode)
-				n.setName(n.getName());
-			else if (n instanceof ElementReferenceNode) {
-				n.setName(n.getName());
-			}
+			String name = n.getName();
+			if (name == null)
+				name = "";
+			n.setName(name);
 		}
 	}
-
 }

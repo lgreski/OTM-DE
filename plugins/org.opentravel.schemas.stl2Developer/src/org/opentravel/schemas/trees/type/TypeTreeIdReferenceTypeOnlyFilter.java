@@ -16,11 +16,11 @@
 package org.opentravel.schemas.trees.type;
 
 import org.eclipse.jface.viewers.Viewer;
-import org.opentravel.schemas.node.AliasNode;
-import org.opentravel.schemas.node.BusinessObjectNode;
-import org.opentravel.schemas.node.CoreObjectNode;
 import org.opentravel.schemas.node.Node;
-import org.opentravel.schemas.node.VWA_Node;
+import org.opentravel.schemas.node.typeProviders.AliasNode;
+import org.opentravel.schemas.node.typeProviders.VWA_Node;
+import org.opentravel.schemas.node.typeProviders.facetOwners.BusinessObjectNode;
+import org.opentravel.schemas.node.typeProviders.facetOwners.CoreObjectNode;
 
 /**
  * Filter types for Id Reference Objects. For release 2.2 it will allow type assignment with list of VWA, Core and
@@ -39,7 +39,7 @@ public class TypeTreeIdReferenceTypeOnlyFilter extends TypeSelectionFilter {
 
 	@Override
 	public boolean select(Viewer viewer, Object parentElement, Object element) {
-		if (element == null || !(element instanceof Node)) {
+		if (!(element instanceof Node)) {
 			return false;
 		}
 		Node n = (Node) element;

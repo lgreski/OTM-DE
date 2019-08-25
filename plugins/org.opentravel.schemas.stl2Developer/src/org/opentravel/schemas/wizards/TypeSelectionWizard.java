@@ -15,34 +15,20 @@
  */
 package org.opentravel.schemas.wizards;
 
-import java.util.ArrayList;
-
 import org.eclipse.jface.viewers.DoubleClickEvent;
 import org.eclipse.jface.viewers.IDoubleClickListener;
 import org.eclipse.jface.wizard.Wizard;
 import org.eclipse.jface.wizard.WizardDialog;
 import org.eclipse.swt.widgets.Shell;
-import org.opentravel.schemacompiler.model.TLBusinessObject;
-import org.opentravel.schemas.modelObject.BusinessObjMO;
 import org.opentravel.schemas.node.Node;
 import org.opentravel.schemas.node.ServiceNode;
-import org.opentravel.schemas.node.VWA_Node;
-import org.opentravel.schemas.node.facets.ContextualFacetNode;
-import org.opentravel.schemas.node.interfaces.INode;
-import org.opentravel.schemas.node.properties.ElementReferenceNode;
-import org.opentravel.schemas.node.resources.ActionFacet;
+import org.opentravel.schemas.node.libraries.LibraryNode;
 import org.opentravel.schemas.node.resources.ResourceNode;
+import org.opentravel.schemas.node.typeProviders.ChoiceFacetNode;
+import org.opentravel.schemas.node.typeProviders.ContextualFacetNode;
 import org.opentravel.schemas.properties.Messages;
-import org.opentravel.schemas.trees.type.BusinessObjectOnlyTypeFilter;
-import org.opentravel.schemas.trees.type.ContextualFacetOwnersTypeFilter;
-import org.opentravel.schemas.trees.type.CoreAndChoiceObjectOnlyTypeFilter;
-import org.opentravel.schemas.trees.type.TypeTreeExtensionSelectionFilter;
-import org.opentravel.schemas.trees.type.TypeTreeIdReferenceTypeOnlyFilter;
-import org.opentravel.schemas.trees.type.TypeTreeSimpleTypeOnlyFilter;
-import org.opentravel.schemas.trees.type.TypeTreeVWASimpleTypeOnlyFilter;
+import org.opentravel.schemas.trees.type.TypeSelectionFilter;
 import org.opentravel.schemas.trees.type.TypeTreeVersionSelectionFilter;
-import org.opentravel.schemas.types.TypeProvider;
-import org.opentravel.schemas.types.TypeUser;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -51,31 +37,34 @@ import org.slf4j.LoggerFactory;
  * 
  * Uses the passed node or first node of the list to set filters for simple/complex/vwa types.
  * 
- * @author Dave Hollander, Agnieszka Janowska
+ * @author Dave Hollander
  * 
  */
 public class TypeSelectionWizard extends Wizard implements IDoubleClickListener {
 	private static final Logger LOGGER = LoggerFactory.getLogger(TypeSelectionWizard.class);
 
 	private Node curNode = null;
-	private ArrayList<Node> curNodeList = null;
-	private ArrayList<Node> setNodeList = new ArrayList<Node>();
-
 	private TypeSelectionPage selectionPage;
 	private WizardDialog dialog;
-	private boolean dontFinish = false; // see run() - use only as converting to action class.
 
-	/**
-	 * Type selection wizard to select a node to assign as a type.
-	 * 
-	 * @param nodeList
-	 *            is a list of nodes to assign the selected type to. The nodes are examined to select tree view filters.
-	 */
-	public TypeSelectionWizard(ArrayList<Node> nodeList) {
-		// this((Node) null);
-		super();
-		curNodeList = nodeList;
-		// LOGGER.debug("Type Selection Wizard initialized for nodelist.");
+	// A simple data container for the strings in a page
+	private class WindowStringsDTO {
+		private static final String PREFIX = "wizard.typeSelection.";
+		private static final String PN = "pageName.";
+		private static final String T = "title.";
+		private static final String D = "description.";
+
+		// Default messages
+		private static final String C = "component";
+		String pageName = Messages.getString(PREFIX + PN + C);
+		String title = Messages.getString(PREFIX + T + C);
+		String description = Messages.getString(PREFIX + D + C);
+
+		private void set(String suffix) {
+			pageName = Messages.getString(PREFIX + PN + suffix);
+			title = Messages.getString(PREFIX + T + suffix);
+			description = Messages.getString(PREFIX + D + suffix);
+		}
 	}
 
 	/**
@@ -86,105 +75,75 @@ public class TypeSelectionWizard extends Wizard implements IDoubleClickListener 
 	 */
 	public TypeSelectionWizard(final Node n) {
 		super();
-		curNodeList = new ArrayList<Node>();
+		// Make sure node is non-null and editable
 		if (n != null && n.isEditable())
-			curNodeList.add(n);
-		// LOGGER.debug("Type Selection Wizard initialized for node.");
+			curNode = n;
 	}
 
+	// Create a type selection page. Called by jface methods
 	@Override
 	public void addPages() {
 		// LOGGER.debug("Adding Selection Page.");
 
-		// Make sure all the nodes are non-null and editable
-		// and set lowest common denominator: simple, vwa and complex.
-		boolean service = false;
-		boolean simple = false;
-		boolean vwa = false;
-		boolean idReference = false;
-		boolean versions = false;
-		boolean resource = false;
-		boolean coreAndChoice = false;
-		boolean contextualFacet = false;
+		// Default messages
+		WindowStringsDTO strings = new WindowStringsDTO();
 
-		// FIXME - how does a list of nodes impact the selection?
-		if (curNodeList != null) {
-			for (Node n : curNodeList) {
-				if (n != null && n.isEditable()) {
-					setNodeList.add(0, n); // why in front of list?
-					if (n instanceof ActionFacet)
-						coreAndChoice = true;
-					else if (n instanceof ResourceNode)
-						resource = true;
-					else if (n.getLaterVersions() != null)
-						versions = true;
-					else if (n.getOwningComponent() instanceof VWA_Node)
-						vwa = true;
-					else if (n.isOnlySimpleTypeUser())
-						simple = true;
-					else if (n instanceof ServiceNode)
-						service = true;
-					else if (n instanceof ElementReferenceNode)
-						idReference = true;
-					else if (n instanceof ContextualFacetNode)
-						contextualFacet = true;
-				}
-			}
-		}
-		// Exit when selected nodes are all read-only
-		if (setNodeList.size() <= 0)
-			return; // TODO - How to exit wizard?
+		// Except for special cases, delegate getting filter to nodes
+		TypeSelectionFilter filter = null;
 
-		// Create a type selection page
-		String pageName = Messages.getString("wizard.typeSelection.pageName.component");
-		String title = Messages.getString("wizard.typeSelection.title.component");
-		String description = Messages.getString("wizard.typeSelection.description.component");
-		if (service) {
-			pageName = Messages.getString("wizard.typeSelection.pageName.service");
-			title = Messages.getString("wizard.typeSelection.title.service");
-			description = Messages.getString("wizard.typeSelection.description.service");
+		// Special cases - set messages and filters for special cases
+		if (curNode instanceof ResourceNode) {
+			strings.set("resource");
+		} else if (curNode.getLaterVersions() != null) {
+			filter = new TypeTreeVersionSelectionFilter(curNode);
+		} else if (curNode instanceof ServiceNode) {
+			strings.set("service");
+		} else if (curNode instanceof ChoiceFacetNode) {
+			strings.set("contextualChoiceFacet");
+		} else if (curNode instanceof ContextualFacetNode) {
+			strings.set("contextualFacet"); // Order is important since choice is contextualFacet
+		} else if (curNode instanceof LibraryNode) {
+			strings.set("library");
 		}
-		if (resource) {
-			pageName = Messages.getString("wizard.typeSelection.pageName.resource");
-			title = Messages.getString("wizard.typeSelection.title.resource");
-			description = Messages.getString("wizard.typeSelection.description.resource");
-		}
-		if (contextualFacet) {
-			pageName = Messages.getString("wizard.typeSelection.pageName.contextualFacet");
-			title = Messages.getString("wizard.typeSelection.title.contextualFacet");
-			description = Messages.getString("wizard.typeSelection.description.contextualFacet");
-		}
-		selectionPage = new TypeSelectionPage(pageName, title, description, null, setNodeList);
 
-		// Set the filters based on type of passed node.
-		if (coreAndChoice)
-			selectionPage.setTypeSelectionFilter(new CoreAndChoiceObjectOnlyTypeFilter(null));
-		else if (versions)
-			selectionPage.setTypeSelectionFilter(new TypeTreeVersionSelectionFilter(curNodeList.get(0)));
-		else if (simple)
-			selectionPage.setTypeSelectionFilter(new TypeTreeSimpleTypeOnlyFilter());
-		else if (vwa)
-			selectionPage.setTypeSelectionFilter(new TypeTreeVWASimpleTypeOnlyFilter());
-		else if (service)
-			selectionPage.setTypeSelectionFilter(new TypeTreeExtensionSelectionFilter(new BusinessObjMO(
-					new TLBusinessObject())));
-		else if (resource)
-			selectionPage.setTypeSelectionFilter(new BusinessObjectOnlyTypeFilter(null));
-		else if (contextualFacet)
-			selectionPage.setTypeSelectionFilter(new ContextualFacetOwnersTypeFilter((ContextualFacetNode) setNodeList
-					.get(0)));
-		else if (idReference)
-			selectionPage.setTypeSelectionFilter(new TypeTreeIdReferenceTypeOnlyFilter());
+		// Get a type selection filter if not already set
+		if (filter == null)
+			filter = curNode.getTypeSelectionFilter();
 
+		// Create the selection page
+		selectionPage = new TypeSelectionPage(strings.pageName, strings.title, strings.description, null, curNode);
+		selectionPage.setTypeSelectionFilter(filter);
 		selectionPage.addDoubleClickListener(this);
+
 		addPage(selectionPage);
+
+		// Testing Guide
+		// 1. Resource - messages and only business objects
+		// 2. Older minor version - find an object that is in minor version that has properties that have later minor
+		// versions.
+		// 3. Service - business object only
+		// 4. Contextual facets - filter with correct type variable set
+		// 4.a. choice
+		// 4.b. query
+		// 4.c. custom
+		// 4.d - copy CF into different library
+		// 5. ID Reference
+		// 6. VWA Property
+		// 6.a VWA as type to VWA
+		// 7. VWA ID Reference property
+		// 8. Attribute
+		// 9. Simple Object
+		// 5. Library - library where used menu: change provider library
+
+		// FIXME - errors testing 2) older minor versions
+		// FIXME - navigator state after library change provider action
 	}
 
 	// According to the link, this belongs in the wizard not page
 	// http://dev.eclipse.org/viewcvs/viewvc.cgi/org.eclipse.jface.snippets/Eclipse%20JFace%20Snippets/org/eclipse/jface/snippets/wizard/Snippet047WizardWithLongRunningOperation.java?view=markup
 	@Override
 	public boolean canFinish() {
-		return selectionPage.getSelectedNode() == null ? false : true;
+		return selectionPage.getSelectedNode() != null;
 	}
 
 	@Override
@@ -198,82 +157,32 @@ public class TypeSelectionWizard extends Wizard implements IDoubleClickListener 
 	/**
 	 * @return the setNodeList which is the filtered copy of the source list
 	 */
-	public ArrayList<Node> getList() {
-		return setNodeList;
-	}
-
-	/**
-	 * @return the setNodeList which is the filtered copy of the source list
-	 */
 	public Node getSelection() {
 		return selectionPage == null ? null : selectionPage.getSelectedNode();
 	}
 
 	// This code is in the AssignTypeAction.execute().
-	// TODO - eliminate after refactoring other invokers.
 	@Override
 	public boolean performFinish() {
-		if (getSelection() == null)
-			return false;
-		if (dontFinish)
-			return true;
-
-		INode sn = selectionPage.getSelectedNode();
-		if (setNodeList != null) {
-			for (INode cn : selectionPage.getCurNodeList()) {
-				// LOGGER.debug("Assigning " + sn.getName() + " to list node " + cn.getName());
-				((TypeUser) cn).setAssignedType((TypeProvider) sn);
-			}
-		} else if (curNode != null) {
-			// LOGGER.debug("Assigning " + selectionPage.getSelectedNode() + " to node " + curNode.getName());
-			((TypeUser) curNode).setAssignedType((TypeProvider) selectionPage.getSelectedNode());
-		} else
-			return false;
-		return true;
+		return getSelection() != null;
 	}
 
 	/**
 	 * Run the wizard but DO NOT assign the types. Usage if (wizard.run(OtmRegistry.getActiveShell())) {
 	 * AssignTypeAction.execute(wizard.getList(), wizard.getSelection()); }
 	 * 
-	 * @return
+	 * @return true if selecting made, false if cancelled
 	 */
 	public boolean run(final Shell shell) {
-		if (curNode == null && curNodeList == null) {
+		if (curNode == null) {
 			LOGGER.warn("Early Exit - no node(s) to post.");
 			return false; // DO Nothing
 		}
 
-		dontFinish = true;
 		dialog = new WizardDialog(shell, this);
 		dialog.setPageSize(700, 600);
 		dialog.create();
 		int result = dialog.open();
-		return result == org.eclipse.jface.window.Window.OK ? true : false;
-		// return true;
+		return result == org.eclipse.jface.window.Window.OK;
 	}
-
-	/**
-	 * Run the wizard AND do assign the type.
-	 * 
-	 * @param assign
-	 *            - if true assign the type to the node on finish
-	 * @return
-	 */
-	public boolean run(final Shell shell, boolean assign) {
-		if (curNode == null && curNodeList == null) {
-			LOGGER.warn("Early Exit - no node(s) to post.");
-			return false; // DO Nothing
-		}
-
-		dontFinish = true;
-		if (assign)
-			dontFinish = false;
-		dialog = new WizardDialog(shell, this);
-		dialog.setPageSize(700, 600);
-		dialog.create();
-		dialog.open();
-		return true;
-	}
-
 }

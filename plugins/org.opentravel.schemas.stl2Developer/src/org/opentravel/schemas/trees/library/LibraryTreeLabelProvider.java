@@ -25,8 +25,9 @@ import org.eclipse.swt.graphics.Color;
 import org.eclipse.swt.graphics.Font;
 import org.eclipse.swt.graphics.Image;
 import org.opentravel.schemas.node.Node;
-import org.opentravel.schemas.node.controllers.NodeUtils;
-import org.opentravel.schemas.node.interfaces.INode;
+import org.opentravel.schemas.node.interfaces.InheritedInterface;
+import org.opentravel.schemas.node.objectMembers.ContributedFacetNode;
+import org.opentravel.schemas.node.typeProviders.AbstractContextualFacet;
 import org.opentravel.schemas.properties.Fonts;
 import org.opentravel.schemas.stl2developer.OtmRegistry;
 import org.slf4j.Logger;
@@ -38,17 +39,11 @@ public class LibraryTreeLabelProvider extends LabelProvider implements IFontProv
 
 	@Override
 	public String getText(final Object element) {
-		String label = "Unknown object type.";
-		if (element instanceof INode) {
-			final Node n = (Node) element;
-			if (n.isDeleted()) {
-				LOGGER.debug("Tried to provide text for deleted node.");
-				// label += " (Deleted)"; // make debugging easier
-				return null;
-			}
-			label = n.getNavigatorName();
-		}
-		return label;
+		if (element instanceof AbstractContextualFacet)
+			return ((AbstractContextualFacet) element).getName();
+		if (element instanceof Node)
+			return ((Node) element).getNavigatorName();
+		return "Unknown object type.";
 	}
 
 	@Override
@@ -69,7 +64,8 @@ public class LibraryTreeLabelProvider extends LabelProvider implements IFontProv
 			final Node n = (Node) element;
 			if (!n.isEditable())
 				font = Fonts.getFontRegistry().get(Fonts.readOnlyItem);
-			else if (n.isInherited() || NodeUtils.checker(n).isInheritedFacet().get())
+			else if (n instanceof InheritedInterface)
+				// else if (n.isInherited() || NodeUtils.checker(n).isInheritedFacet().get())
 				font = Fonts.getFontRegistry().get(Fonts.inheritedItem);
 			// is this inherited from an earlier version?
 			else if (n.getChain() != null && n.getLibrary() != n.getChain().getHead())
@@ -87,9 +83,11 @@ public class LibraryTreeLabelProvider extends LabelProvider implements IFontProv
 
 		if (element instanceof Node) {
 			final Node n = (Node) element;
-			if (n.isDeprecated())
+			if (n instanceof ContributedFacetNode)
+				color = OtmRegistry.getMainWindow().getColorProvider().getColor(SWT.COLOR_DARK_RED);
+			else if (n.isDeprecated())
 				color = OtmRegistry.getMainWindow().getColorProvider().getColor(SWT.COLOR_DARK_MAGENTA);
-			else if (n.isInherited() || NodeUtils.checker(n).isInheritedFacet().get())
+			else if (n instanceof InheritedInterface)
 				color = OtmRegistry.getMainWindow().getColorProvider().getColor(SWT.COLOR_DARK_BLUE);
 			else if (!n.isEditable())
 				color = OtmRegistry.getMainWindow().getColorProvider().getColor(SWT.COLOR_DARK_GRAY);
@@ -110,11 +108,7 @@ public class LibraryTreeLabelProvider extends LabelProvider implements IFontProv
 
 	@Override
 	public StyledString getStyledText(Object element) {
-		if (element instanceof INode) {
-			if (!((INode) element).isDeleted())
-				return new StyledString(getText(element));
-		}
-		return new StyledString("");
+		return new StyledString(getText(element));
 	}
 
 }

@@ -39,12 +39,12 @@ public class VersionManager {
 	 *            is the version node representing this set of versioned objects. MUST be in a chain.
 	 */
 	public VersionManager() {
-		versions = new ArrayList<Node>();
+		versions = new ArrayList<>();
 		// may not be set yet: assert owner.getChain() != null;
 	}
 
 	public Node getOldestVersion() {
-		return versions.get(versions.size() - 1);
+		return versions.isEmpty() ? null : versions.get(versions.size() - 1);
 	}
 
 	public Node get() {
@@ -96,9 +96,12 @@ public class VersionManager {
 		return versions.remove(n);
 	}
 
+	/**
+	 * @return new list containing any older versions of this object
+	 */
 	public List<Node> getOlderVersions(Node version) {
 		int i = versions.indexOf(version);
-		List<Node> older = new ArrayList<Node>();
+		List<Node> older = new ArrayList<>();
 		for (Node n : versions)
 			if (isNewer(version, n))
 				older.add(n);
@@ -110,5 +113,11 @@ public class VersionManager {
 	 */
 	public boolean contains(Node node) {
 		return versions.contains(node);
+	}
+
+	public void close() {
+		for (Node n : versions)
+			n.close();
+		versions.clear();
 	}
 }

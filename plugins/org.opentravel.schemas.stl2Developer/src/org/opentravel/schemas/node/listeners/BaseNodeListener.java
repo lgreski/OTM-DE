@@ -19,14 +19,15 @@ import org.opentravel.schemacompiler.event.OwnershipEvent;
 import org.opentravel.schemacompiler.event.ValueChangeEvent;
 import org.opentravel.schemacompiler.model.TLModelElement;
 import org.opentravel.schemas.node.Node;
-import org.opentravel.schemas.node.XsdNode;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * @author Dave Hollander
  *
  */
 public class BaseNodeListener implements INodeListener {
-	// private static final Logger LOGGER = LoggerFactory.getLogger(BaseNodeListener.class);
+	private static final Logger LOGGER = LoggerFactory.getLogger(BaseNodeListener.class);
 
 	Node thisNode;
 
@@ -41,36 +42,37 @@ public class BaseNodeListener implements INodeListener {
 
 	@Override
 	public void processValueChangeEvent(ValueChangeEvent<?, ?> event) {
-		Node newValue = getNewValue(event);
-		Node oldValue = getOldValue(event);
+		// Node newValue = getNewValue(event);
+		// Node oldValue = getOldValue(event);
+		// LOGGER.debug("Value Change event: " + event.getType() + " this = " + thisNode + ", old = " + oldValue
+		// + ", new = " + newValue);
+
 		switch (event.getType()) {
 		case DOCUMENTATION_MODIFIED:
+			break;
 		case NAME_MODIFIED:
+			break;
 		case TYPE_ASSIGNMENT_MODIFIED:
 			break;
 		case FACET_OWNER_MODIFIED:
-			// LOGGER.debug("Value Change event: " + event.getType() + " this = " + thisNode + ", old = " + oldValue
-			// + ", new = " + newValue);
-			// if (thisNode instanceof ContextualFacetNode)
-			// ((ContextualFacetNode)thisNode).updateContribution((ContextualFacetNode )newValue);
 			break;
 		default:
 			// LOGGER.debug("Value Change event: " + event.getType() + " this = " + thisNode + ", old = " + oldValue
 			// + ", new = " + newValue);
 		}
-		// if (event.getType() != ModelEventType.DOCUMENTATION_MODIFIED)
 	}
 
 	@Override
 	public void processOwnershipEvent(OwnershipEvent<?, ?> event) {
-		Node affectedNode = getAffectedNode(event);
+		// Node affectedNode = getAffectedNode(event);
 		// LOGGER.debug("Ownership event: " + event.getType() + " this = " + thisNode + " affected = " + affectedNode);
 	}
 
 	@Override
 	public Node getNode() {
 		// XsdNodes are always represented by their OTM Model counterpart.
-		return thisNode instanceof XsdNode ? ((XsdNode) thisNode).getOtmModel() : thisNode;
+		// return thisNode instanceof XsdNode ? ((XsdNode) thisNode).getOtmModel() : thisNode;
+		return thisNode;
 	}
 
 	public Node getSource(ValueChangeEvent<?, ?> event) {
@@ -80,6 +82,7 @@ public class BaseNodeListener implements INodeListener {
 		return source;
 	}
 
+	@Override
 	public Node getNewValue(ValueChangeEvent<?, ?> event) {
 		Node affectedNode = null;
 		if (event.getNewValue() instanceof TLModelElement)

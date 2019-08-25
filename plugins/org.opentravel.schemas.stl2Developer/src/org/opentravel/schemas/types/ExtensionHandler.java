@@ -20,10 +20,14 @@ package org.opentravel.schemas.types;
 
 import org.opentravel.schemacompiler.event.ModelElementListener;
 import org.opentravel.schemacompiler.model.NamedEntity;
+import org.opentravel.schemacompiler.model.TLExtension;
+import org.opentravel.schemacompiler.model.TLExtensionOwner;
 import org.opentravel.schemacompiler.model.TLModelElement;
-import org.opentravel.schemas.node.NamespaceHandler;
+import org.opentravel.schemacompiler.model.TLValueWithAttributes;
 import org.opentravel.schemas.node.Node;
+import org.opentravel.schemas.node.handlers.NamespaceHandler;
 import org.opentravel.schemas.node.interfaces.ExtensionOwner;
+import org.opentravel.schemas.node.typeProviders.VWA_Node;
 import org.opentravel.schemas.types.WhereExtendedHandler.WhereExtendedListener;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -53,10 +57,29 @@ public class ExtensionHandler extends AbstractAssignmentHandler<ExtensionOwner> 
 	/**
 	 * Return the base object node. Uses base from TL Model Object.
 	 */
+	@Override
 	public Node get() {
-		// Get the extension base from the TL Model Element
-		NamedEntity tlObj = owner.getModelObject().getTLBase();
-		return Node.GetNode((TLModelElement) tlObj);
+		return Node.GetNode(getTLAssignedNamedEntity());
+	}
+
+	// 11/2/2017 - dmh - will also work on Resource and Operation when the replaced ModelObject version did not.
+	// @Override
+	@Override
+	public NamedEntity getTLAssignedNamedEntity() {
+		NamedEntity tlObj = null;
+		TLExtension tle = null;
+		if (owner instanceof VWA_Node)
+			tlObj = ((VWA_Node) owner).getTLModelObject().getParentType();
+		else {
+			// Get the extension base from the TL Model Element
+			if (owner.getTLModelObject() instanceof TLExtensionOwner)
+				tle = ((TLExtensionOwner) owner.getTLModelObject()).getExtension();
+			if (tle != null)
+				tlObj = tle.getExtendsEntity();
+		}
+		return tlObj;
+
+		// return owner.getModelObject().getTLBase();
 	}
 
 	/**
@@ -97,28 +120,28 @@ public class ExtensionHandler extends AbstractAssignmentHandler<ExtensionOwner> 
 		// base.getNameWithPrefix());
 		// Can assign facets to extension points.
 		if (base.getLibrary() != null)
-			if (!base.getLibrary().getDescendants_LibraryMembers().contains(base.getOwningComponent()))
+			if (!base.getLibrary().getDescendants_LibraryMembersAsNodes().contains(base.getOwningComponent()))
 				LOGGER.error("Base library does not contain base object " + base);
 		// assert (base.getLibrary().getDescendants_LibraryMembers().contains(base));
 
 		// Save the old base object for after the assignment
 		Node oldBase = owner.getExtensionBase(); // from TL object
-		if (oldBase == base) {
+		if (oldBase == base)
 			// TL Object relation already set. Insure the where used is correct. Handler prevents duplicates.
 			base.getWhereExtendedHandler().add(owner);
-			base.getWhereExtendedHandler().setListener(owner);
-		} else {
+		else {
 			// If owner was extending a different base, remove the link and listener.
 			if (oldBase != null) {
-				oldBase.getWhereExtendedHandler().removeListener(owner);
-				oldBase.getWhereExtendedHandler().remove((Node) owner);
-				owner.getModelObject().setExtendsType(null); // allow ownership event to happen
+				oldBase.getWhereExtendedHandler().remove(owner);
+				setTL(null);
+				// owner.getModelObject().setExtendsType(null); // allow ownership event to happen
 			}
 			// Add a where extended listener to the new base before making the assignment
 			base.getWhereExtendedHandler().setListener(owner);
 
-			// Do the assignment
-			owner.getModelObject().setExtendsType(base.getModelObject());
+			// Do the assignment. Will fire WhereExtendedListener on the base.
+			setTL(base);
+			// owner.getModelObject().setExtendsType(base.getModelObject());
 		}
 		// update library where used
 		// on initial load/type resolver old and base will be the same
@@ -136,7 +159,7 @@ public class ExtensionHandler extends AbstractAssignmentHandler<ExtensionOwner> 
 		}
 
 		if (base.getLibrary() != null)
-			if (!base.getLibrary().getDescendants_LibraryMembers().contains(base.getOwningComponent()))
+			if (!base.getLibrary().getDescendants_LibraryMembersAsNodes().contains(base.getOwningComponent()))
 				LOGGER.error("Base library does not contain base object " + base);
 		// assert (base.getLibrary().getDescendants_LibraryMembers().contains(base));
 		// if (oldBase == null)
@@ -154,7 +177,8 @@ public class ExtensionHandler extends AbstractAssignmentHandler<ExtensionOwner> 
 	 */
 	private boolean remove() {
 		// Let the model object clear it out.
-		owner.getModelObject().setExtendsType(null);
+		setTL(null);
+		// owner.getModelObject().setExtendsType(null);
 
 		removeListener();
 		return true;
@@ -170,14 +194,33 @@ public class ExtensionHandler extends AbstractAssignmentHandler<ExtensionOwner> 
 	}
 
 	@Override
-	public TLModelElement getTLModelElement() {
+	public TLModelElement getAssignedTLModelElement() {
 		// TODO Auto-generated method stub
 		return null;
 	}
 
-	@Override
-	public NamedEntity getTLNamedEntity() {
-		return owner.getModelObject().getTLBase();
+	// TL VWA uses parent not extension for base type
+	private void setVWA_TL(VWA_Node vwa) {
+		if (owner.getTLModelObject() instanceof TLValueWithAttributes)
+			if (vwa != null)
+				((TLValueWithAttributes) owner.getTLModelObject()).setParentType(vwa.getTLModelObject());
+			else
+				((TLValueWithAttributes) owner.getTLModelObject()).setParentType(null); // clear value
 	}
 
+	private void setTL(Node base) {
+		if (owner instanceof VWA_Node)
+			setVWA_TL((VWA_Node) base);
+		else if (owner.getTLModelObject() instanceof TLExtensionOwner)
+			if (base == null)
+				((TLExtensionOwner) owner.getTLModelObject()).setExtension(null);
+			else if (base.getTLModelObject() instanceof NamedEntity) {
+				TLExtension tlExtension = ((TLExtensionOwner) owner.getTLModelObject()).getExtension();
+				if (tlExtension == null) {
+					tlExtension = new TLExtension();
+					((TLExtensionOwner) owner.getTLModelObject()).setExtension(tlExtension);
+				}
+				tlExtension.setExtendsEntity((NamedEntity) base.getTLModelObject());
+			}
+	}
 }

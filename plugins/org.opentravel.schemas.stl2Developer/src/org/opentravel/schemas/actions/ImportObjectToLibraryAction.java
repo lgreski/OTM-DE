@@ -21,10 +21,12 @@ import java.util.List;
 
 import org.opentravel.schemas.node.Node;
 import org.opentravel.schemas.node.ServiceNode;
-import org.opentravel.schemas.node.facets.ContextualFacetNode;
+import org.opentravel.schemas.node.interfaces.ContextualFacetOwnerInterface;
 import org.opentravel.schemas.node.interfaces.LibraryMemberInterface;
 import org.opentravel.schemas.node.libraries.LibraryNode;
+import org.opentravel.schemas.node.objectMembers.ContributedFacetNode;
 import org.opentravel.schemas.node.resources.ResourceNode;
+import org.opentravel.schemas.node.typeProviders.ContextualFacetNode;
 import org.opentravel.schemas.properties.Messages;
 import org.opentravel.schemas.properties.StringProperties;
 import org.opentravel.schemas.stl2developer.DialogUserNotifier;
@@ -32,6 +34,7 @@ import org.opentravel.schemas.stl2developer.MainWindow;
 import org.opentravel.schemas.stl2developer.OtmRegistry;
 import org.opentravel.schemas.wizards.GlobalLocalCancelDialog;
 import org.opentravel.schemas.wizards.GlobalLocalCancelDialog.GlobalDialogResult;
+import org.opentravel.schemas.wizards.TypeSelectionWizard;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -71,36 +74,38 @@ public class ImportObjectToLibraryAction extends OtmAbstractAction {
 	 * 
 	 * @param destination
 	 */
-	public void importSelectedToLibrary(final LibraryNode destination) {
-		if (destination == null) {
-			LOGGER.error("Tried to import to null destination library.");
-			return;
-		}
-		if (!destination.isTLLibrary()) {
-			LOGGER.error("Cannot import into built-in or XSD libraries");
-			DialogUserNotifier.openInformation("WARNING", "You can not import into a built-in or XSD library.");
-			return;
-		}
-		if (!destination.isEditable()) {
-			LOGGER.error("Destination library is not editable.");
-			DialogUserNotifier.openInformation("WARNING", "Destination library is not editable.");
-			return;
-		}
+	public void importSelectedToLibrary(LibraryNode destination) {
+		// Only the head library is displayed, but some of its contents are from earlier versions
 		final List<Node> sourceNodes = mc.getSelectedNodes_NavigatorView();
-		if (sourceNodes == null || sourceNodes.size() <= 0) {
-			LOGGER.error("No source nodes selected for import.");
-			DialogUserNotifier.openInformation("WARNING", "No components selected for importing.");
+
+		String warning = null;
+		if (destination == null)
+			warning = "Destination library is missing.";
+		else if (destination.isInChain())
+			destination = destination.getHead();
+		if (destination == null)
+			warning = "Tried to import to missing destination library.";
+		else if (!destination.isTLLibrary())
+			warning = "You can not import into a built-in or XSD library.";
+		else if (!destination.isEditable())
+			warning = "Destination library is not editable.";
+		else if (sourceNodes == null || sourceNodes.isEmpty())
+			warning = "No components selected for importing.";
+
+		if (warning != null) {
+			DialogUserNotifier.openInformation("WARNING", warning);
 			return;
 		}
-		LOGGER.info("Importing " + sourceNodes.size() + " selected nodes to library " + destination);
+
+		// LOGGER.info("Importing " + sourceNodes.size() + " selected nodes to library " + destination);
 
 		// If a library is selected, get its named-type children and filter the other removing those
 		// in the destination library.
-		final List<Node> eligibleForImporting = new ArrayList<Node>();
+		final List<Node> eligibleForImporting = new ArrayList<>();
 		for (Node n : sourceNodes) {
 			if (n instanceof LibraryNode)
-				eligibleForImporting.addAll(n.getDescendants_LibraryMembers());
-			else if (!(n.getLibrary()).equals(destination))
+				eligibleForImporting.addAll(n.getDescendants_LibraryMembersAsNodes());
+			else if (!(n.getLibrary() == destination))
 				eligibleForImporting.add(n);
 		}
 
@@ -111,8 +116,13 @@ public class ImportObjectToLibraryAction extends OtmAbstractAction {
 			if (n instanceof ResourceNode) {
 				destination.copyMember((LibraryMemberInterface) n);
 				done = n.getLibrary();
-			} else if (n instanceof ContextualFacetNode)
-				done = (Node) destination.copyMember((LibraryMemberInterface) n);
+			} else if (n instanceof ContributedFacetNode) {
+				// Contextual facets need to ask the user where to inject
+				done = importNode(((ContributedFacetNode) n).getContributor(), destination);
+			} else if (n instanceof ContextualFacetNode) {
+				// Contextual facets need to ask the user where to inject
+				done = importNode((ContextualFacetNode) n, destination);
+			}
 		if (done != null) {
 			mc.refresh(done); // refresh everything.
 			return;
@@ -126,17 +136,19 @@ public class ImportObjectToLibraryAction extends OtmAbstractAction {
 					break;
 				}
 		}
+
 		if (eligibleForImporting == null || eligibleForImporting.size() <= 0) {
-			LOGGER.error("No eligible nodes selected for import.");
+			// LOGGER.error("No eligible nodes selected for import.");
 			DialogUserNotifier.openInformation("WARNING", "No eligible components selected for importing.");
 			return;
 		}
+
 		// Ask if they want to also import the types assigned to these objects.
 		int ans = DialogUserNotifier.openQuestionWithCancel(Messages.getString("action.import.copyDescendants.title"),
 				Messages.getString("action.import.copyDescendants"));
 		switch (ans) {
 		case 0: // Yes
-			ArrayList<Node> selected = new ArrayList<Node>(eligibleForImporting);
+			ArrayList<Node> selected = new ArrayList<>(eligibleForImporting);
 			for (Node n : selected) {
 				for (Node nn : n.getDescendants_AssignedTypes(true))
 					if (!eligibleForImporting.contains(nn))
@@ -148,7 +160,7 @@ public class ImportObjectToLibraryAction extends OtmAbstractAction {
 			return;
 		}
 
-		LOGGER.info("Importing " + eligibleForImporting.size() + " eligible nodes to library.");
+		// LOGGER.info("Importing " + eligibleForImporting.size() + " eligible nodes to library.");
 		mc.postStatus("Ready to import " + eligibleForImporting.size() + " components.");
 
 		// TODO - where are already existing objects removed from list?
@@ -176,6 +188,43 @@ public class ImportObjectToLibraryAction extends OtmAbstractAction {
 		mc.refresh(destination); // refresh everything.
 	}
 
+	/**
+	 * Copy the passed contextual facet and add to destination library. Ask the user which object to inject upon.
+	 * 
+	 * @param n
+	 * @param destination
+	 * @return new node or null if error or cancel
+	 */
+	private Node importNode(ContextualFacetNode n, LibraryNode destination) {
+		Node done = null;
+		if (n != null) {
+			done = (Node) destination.copyMember(n);
+			// Find candidates for new facet owner
+			ContextualFacetOwnerInterface owner = askForNewCFOwner((ContextualFacetNode) done);
+			if (owner != null)
+				((ContextualFacetNode) done).setOwner(owner);
+			else
+				done.delete();
+		}
+		return done;
+	}
+
+	/**
+	 * Return the selected CF owner
+	 * 
+	 * @param n
+	 * @return
+	 */
+	private ContextualFacetOwnerInterface askForNewCFOwner(ContextualFacetNode n) {
+		// ArrayList<Node> nodeList = new ArrayList<>();
+		// nodeList.add(n);
+		final TypeSelectionWizard wizard = new TypeSelectionWizard(n);
+		Node owner = null;
+		if (wizard.run(OtmRegistry.getActiveShell()))
+			owner = wizard.getSelection();
+		return owner instanceof ContextualFacetOwnerInterface ? (ContextualFacetOwnerInterface) owner : null;
+	}
+
 	private void selectImportedNodesInNavigation(Collection<Node> importedNodesMap) {
 		if (importedNodesMap != null && !importedNodesMap.isEmpty()) {
 			Node firstNode = importedNodesMap.iterator().next();
@@ -192,7 +241,7 @@ public class ImportObjectToLibraryAction extends OtmAbstractAction {
 	 * @param newNode
 	 */
 	public GlobalDialogResult askGlobalLocalNone(final List<Node> sourceNodes, final LibraryNode destLib) {
-		LOGGER.debug("Asking about global/local/none change of type assignments.");
+		// LOGGER.debug("Asking about global/local/none change of type assignments.");
 
 		// Now, ask the question.
 		//

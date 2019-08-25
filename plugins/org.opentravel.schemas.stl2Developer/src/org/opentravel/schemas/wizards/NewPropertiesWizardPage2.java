@@ -43,16 +43,18 @@ import org.eclipse.swt.widgets.Combo;
 import org.eclipse.swt.widgets.Composite;
 import org.eclipse.swt.widgets.Label;
 import org.eclipse.swt.widgets.Text;
-import org.opentravel.schemas.modelObject.ModelObject;
+import org.opentravel.schemacompiler.model.TLModelElement;
 import org.opentravel.schemas.node.Node;
 import org.opentravel.schemas.node.NodeFactory;
 import org.opentravel.schemas.node.NodeNameUtils;
+import org.opentravel.schemas.node.interfaces.FacadeInterface;
+import org.opentravel.schemas.node.interfaces.FacetInterface;
 import org.opentravel.schemas.node.interfaces.INode;
 import org.opentravel.schemas.node.properties.AttributeNode;
 import org.opentravel.schemas.node.properties.ElementNode;
 import org.opentravel.schemas.node.properties.PropertyNode;
 import org.opentravel.schemas.node.properties.PropertyNodeType;
-import org.opentravel.schemas.node.properties.PropertyOwnerInterface;
+import org.opentravel.schemas.node.properties.TypedPropertyNode;
 import org.opentravel.schemas.trees.library.LibrarySorter;
 import org.opentravel.schemas.trees.library.LibraryTreeContentProvider;
 import org.opentravel.schemas.trees.library.LibraryTreeInheritedFilter;
@@ -87,7 +89,7 @@ public class NewPropertiesWizardPage2 extends WizardPage {
 	private final List<PropertyNodeType> enabledPropertyTypes;
 
 	private final Node scopeNode;
-	private final PropertyOwnerInterface owningFacet;
+	private final FacetInterface owningFacet;
 	private PropertyNode selectedNode;
 
 	private final AtomicInteger counter = new AtomicInteger(1);
@@ -113,13 +115,13 @@ public class NewPropertiesWizardPage2 extends WizardPage {
 	/**
 	 */
 	protected NewPropertiesWizardPage2(final String pageName, final String title, final FormValidator validator,
-			final List<PropertyNodeType> enabledTypes, final PropertyOwnerInterface actOnNode, final Node scope) {
+			final List<PropertyNodeType> enabledTypes, final FacetInterface actOnNode, final Node scope) {
 		super(pageName, title, null);
 		this.validator = validator;
-		this.enabledPropertyTypes = new ArrayList<PropertyNodeType>(enabledTypes);
+		this.enabledPropertyTypes = new ArrayList<>(enabledTypes);
 		this.owningFacet = actOnNode;
 		this.scopeNode = scope;
-		this.newProperties = new LinkedList<PropertyNode>();
+		this.newProperties = new LinkedList<>();
 	}
 
 	@Override
@@ -267,7 +269,7 @@ public class NewPropertiesWizardPage2 extends WizardPage {
 				if (index > 0) {
 					getNewProperties().remove(index--);
 					getNewProperties().add(index, selected);
-					selected.moveProperty(PropertyNode.UP);
+					selected.moveUp();
 					propertyTree.refresh();
 					selectInList(selected);
 				}
@@ -281,7 +283,7 @@ public class NewPropertiesWizardPage2 extends WizardPage {
 				if (index < getNewProperties().size() - 1) {
 					getNewProperties().remove(index++);
 					getNewProperties().add(index, selected);
-					selected.moveProperty(PropertyNode.DOWN);
+					selected.moveDown();
 					propertyTree.refresh();
 					selectInList(selected);
 				}
@@ -380,14 +382,19 @@ public class NewPropertiesWizardPage2 extends WizardPage {
 	/**
 	 * @return newly created property cloned from passed property.
 	 */
-	private PropertyNode newProperty(final PropertyNode o) {
+	private PropertyNode newProperty(final PropertyNode srcProperty) {
 		// LOGGER.debug("New Property from property " + o);
-		if (!enabledPropertyTypes.contains(o.getPropertyType())) {
-			setMessage(o.getPropertyType().getName() + "s are not allowed for this object", WARNING);
+		if (!enabledPropertyTypes.contains(srcProperty.getPropertyType())) {
+			setMessage(srcProperty.getPropertyType().getName() + "s are not allowed for this object", WARNING);
 			return null;
 		}
-		final PropertyNode copy = (PropertyNode) NodeFactory.newMember((INode) owningFacet, o.cloneTLObj());
-		copy.setAssignedType((TypeProvider) o.getType());
+		// Use the node factory to determine what type of property.
+		final PropertyNode copy = (PropertyNode) NodeFactory.newChild((Node) owningFacet,
+				(TLModelElement) srcProperty.cloneTLObj());
+		// Should not be needed, but in case clone does not assign, assign type now
+		if (copy instanceof TypedPropertyNode && srcProperty instanceof TypedPropertyNode)
+			((AttributeNode) copy).setAssignedType(((TypedPropertyNode) srcProperty).getAssignedType());
+		// Add newly created copy to list
 		getNewProperties().add(copy);
 		return copy;
 	}
@@ -395,12 +402,14 @@ public class NewPropertiesWizardPage2 extends WizardPage {
 	/**
 	 * @return newly created property with name and type taken from passed node.
 	 */
-	private PropertyNode newProperty(final Node node) {
+	private PropertyNode newProperty(Node node) {
 		// LOGGER.debug("New Property: " + node);
+		if (node instanceof FacadeInterface)
+			node = ((FacadeInterface) node).get();
 		final PropertyNode newProperty = newProperty();
 		newProperty.setName(NodeNameUtils.adjustCaseOfName(newProperty.getPropertyType(), node.getName()));
-		if (node.isAssignable() && node instanceof TypeProvider)
-			newProperty.setAssignedType((TypeProvider) node);
+		if (node.isAssignable() && node instanceof TypeProvider && newProperty instanceof TypedPropertyNode)
+			((TypedPropertyNode) newProperty).setAssignedType((TypeProvider) node);
 		else
 			setMessage(node + " is not assigable as type. No type assigned.", WARNING);
 		return newProperty;
@@ -432,6 +441,7 @@ public class NewPropertiesWizardPage2 extends WizardPage {
 		if (getNewProperties().size() > 0) {
 			selectInList(getNewProperties().get(index > 0 ? index - 1 : 0));
 		}
+		updateView();
 	}
 
 	private void chooseAssignedType() {
@@ -443,11 +453,14 @@ public class NewPropertiesWizardPage2 extends WizardPage {
 		}
 
 		final TypeSelectionWizard wizard = new TypeSelectionWizard(node);
-		wizard.run(getShell(), true); // let the user select type then assign it
+		// if (wizard.run(getShell(), true)) // let the user select type then assign it
+		// let the user select type then assign it
+		if (wizard.run(getShell()))
+			((TypeUser) node).setAssignedType((TypeProvider) wizard.getSelection());
+
 		// Use the type name as the property name if the user has not already set one.
-		if (wizard.getSelection() != null
-				&& (getSelectedNode().getName().startsWith("Property") || getSelectedNode().getName().startsWith(
-						"property")))
+		if (wizard.getSelection() != null && (getSelectedNode().getName().startsWith("Property")
+				|| getSelectedNode().getName().startsWith("property")))
 			getSelectedNode().setName(wizard.getSelection().getName());
 		updateView();
 		propertyTree.update(node, null);
@@ -517,9 +530,14 @@ public class NewPropertiesWizardPage2 extends WizardPage {
 		final PropertyNode selectedNode = getSelectedNode();
 		if (selectedNode != null) {
 			nameText.setText(selectedNode.getName());
-			final ModelObject<?> modelObject = selectedNode.getModelObject();
-			typeText.setText(modelObject == null || modelObject.getTLType() == null ? "" : modelObject.getTLType()
-					.getLocalName());
+
+			if (selectedNode instanceof TypedPropertyNode)
+				if (((TypedPropertyNode) selectedNode).getAssignedTLNamedEntity() != null)
+					typeText.setText(((TypedPropertyNode) selectedNode).getAssignedTLNamedEntity().getLocalName());
+			// final ModelObject<?> modelObject = selectedNode.getModelObject();
+			// typeText.setText(modelObject == null || modelObject.getTLType() == null ? "" : modelObject.getTLType()
+			// .getLocalName());
+
 			descriptionText.setText(selectedNode.getDescription());
 			final int index = enabledPropertyTypes.indexOf(selectedNode.getPropertyType());
 			if (index >= 0) {
@@ -608,7 +626,7 @@ public class NewPropertiesWizardPage2 extends WizardPage {
 	}
 
 	private List<PropertyNode> getSelectedValidPropertiesFromLibraryTree() {
-		final List<PropertyNode> ret = new ArrayList<PropertyNode>();
+		final List<PropertyNode> ret = new ArrayList<>();
 		final ISelection selection = libraryTree.getSelection();
 		if (selection instanceof StructuredSelection) {
 			final StructuredSelection strSel = (StructuredSelection) selection;

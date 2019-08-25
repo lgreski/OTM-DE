@@ -19,11 +19,12 @@ import org.opentravel.schemacompiler.model.TLAlias;
 import org.opentravel.schemacompiler.model.TLAttribute;
 import org.opentravel.schemacompiler.model.TLBusinessObject;
 import org.opentravel.schemacompiler.model.TLIndicator;
+import org.opentravel.schemacompiler.model.TLModelElement;
 import org.opentravel.schemacompiler.model.TLProperty;
-import org.opentravel.schemas.node.BusinessObjectNode;
 import org.opentravel.schemas.node.NodeFactory;
-import org.opentravel.schemas.node.facets.FacetNode;
 import org.opentravel.schemas.node.libraries.LibraryNode;
+import org.opentravel.schemas.node.typeProviders.FacetProviderNode;
+import org.opentravel.schemas.node.typeProviders.facetOwners.BusinessObjectNode;
 
 public class FacetNodeBuilder {
 	interface TLCreator {
@@ -33,12 +34,12 @@ public class FacetNodeBuilder {
 	// facets must have a parent and library to pass action prechecks
 	// private FacetNode facet = new FacetNode(new TLFacet());
 	private BusinessObjectNode bo = null;
-	private FacetNode facet = null;
+	private FacetProviderNode facet = null;
 	private static LibraryNode ln;
 
-	public static FacetNodeBuilder create() {
-		return new FacetNodeBuilder();
-	}
+	// public static FacetNodeBuilder create() {
+	// return new FacetNodeBuilder();
+	// }
 
 	public static FacetNodeBuilder create(LibraryNode library) {
 		ln = library;
@@ -49,7 +50,7 @@ public class FacetNodeBuilder {
 		buildFacet();
 		for (String n : names) {
 			Object obj = tlCreator.create(n);
-			NodeFactory.newMember(facet, obj);
+			NodeFactory.newChild(facet, (TLModelElement) obj);
 		}
 		return this;
 	}
@@ -106,7 +107,7 @@ public class FacetNodeBuilder {
 		}, names);
 	}
 
-	public FacetNode build() {
+	public FacetProviderNode build() {
 		buildFacet();
 		return facet;
 	}

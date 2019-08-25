@@ -16,12 +16,14 @@
 package org.opentravel.schemas.testers;
 
 import org.eclipse.core.expressions.PropertyTester;
-import org.opentravel.schemas.node.ImpliedNode;
 import org.opentravel.schemas.node.Node;
+import org.opentravel.schemas.node.typeProviders.ImpliedNode;
 import org.opentravel.schemas.types.TypeUser;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class NodeTester extends PropertyTester {
-	// private static final Logger LOGGER = LoggerFactory.getLogger(NodeTester.class);
+	private static final Logger LOGGER = LoggerFactory.getLogger(NodeTester.class);
 
 	public static final String IS_DELETEABLE = "isDeleteable";
 	public static final String HAS_TYPE = "hasType";

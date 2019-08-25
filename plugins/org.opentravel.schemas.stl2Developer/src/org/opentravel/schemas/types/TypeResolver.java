@@ -21,15 +21,13 @@ package org.opentravel.schemas.types;
 import java.util.ArrayList;
 import java.util.List;
 
-import org.opentravel.schemas.node.AliasNode;
 import org.opentravel.schemas.node.Node;
 import org.opentravel.schemas.node.Node.NodeVisitor;
-import org.opentravel.schemas.node.facets.ContributedFacetNode;
-import org.opentravel.schemas.node.facets.SimpleFacetNode;
-import org.opentravel.schemas.node.interfaces.ComplexComponentInterface;
 import org.opentravel.schemas.node.interfaces.ExtensionOwner;
 import org.opentravel.schemas.node.interfaces.INode;
 import org.opentravel.schemas.node.libraries.LibraryNode;
+import org.opentravel.schemas.node.objectMembers.ContributedFacetNode;
+import org.opentravel.schemas.node.typeProviders.AliasNode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -64,12 +62,12 @@ public class TypeResolver {
 	 * Resolved types across entire model.
 	 */
 	public void resolveTypes() {
-		ArrayList<LibraryNode> libs = new ArrayList<LibraryNode>(Node.getAllLibraries());
+		ArrayList<LibraryNode> libs = new ArrayList<>(Node.getAllLibraries());
 		resolveTypes(libs);
 	}
 
 	public void resolveTypes(LibraryNode lib) {
-		ArrayList<LibraryNode> newLibs = new ArrayList<LibraryNode>();
+		ArrayList<LibraryNode> newLibs = new ArrayList<>();
 		newLibs.add(lib);
 		resolveTypes(newLibs);
 	}
@@ -80,6 +78,10 @@ public class TypeResolver {
 			wasEditable = lib.isEditable(); // Resolve all libraries, not just editable ones
 			// LOGGER.debug("Resolving Types in " + lib);
 			lib.setEditable(true);
+
+			// Load inherited children since they can change the model (add contrib and contextual facets)
+			for (ExtensionOwner eo : lib.getDescendants_ExtensionOwners())
+				eo.getInheritedChildren();
 
 			// Resolve all un-linked contributed facets FIRST since that impacts children
 			for (ContributedFacetNode cf : lib.getDescendants_ContributedFacets())
@@ -96,8 +98,9 @@ public class TypeResolver {
 			lib.setEditable(wasEditable);
 		}
 
-		// LOGGER.debug("Visitor Resolver visited: " + typeUsers + "  Resolved: " + resolvedTypes + "  UnResolved: "
-		// + unResolvedTypes + "  Unassigned: " + ModelNode.getUnassignedNode().getTypeUsersCount());
+		// LOGGER.debug("Visitor Resolver visited: " + newLibs);
+		// LOGGER.debug("Visitor Resolver visited: " + typeUsers + " Resolved: " + resolvedTypes + " UnResolved: "
+		// + unResolvedTypes + " Unassigned: " + ModelNode.getUnassignedNode().getTypeUsersCount());
 	}
 
 	private class resolveBaseTypes implements NodeVisitor {
@@ -119,8 +122,7 @@ public class TypeResolver {
 			if (in instanceof TypeUser) {
 				TypeProvider provider = ((TypeUser) in).getAssignedType();
 				if (provider != null) {
-					provider.addWhereUsed((TypeUser) in); // add to list
-					provider.setListener((TypeUser) in); // set listener
+					provider.addTypeUser((TypeUser) in); // add to list
 					WhereUsedLibraryHandler handler = null;
 					if (provider.getLibrary() != null)
 						handler = provider.getLibrary().getWhereUsedHandler();
@@ -139,19 +141,21 @@ public class TypeResolver {
 	 */
 	// Used in graphical editor
 	public static Node getNodeType(Node n) {
-		Node type = n.getType();
+		Node type = n.getType(); // FIXME - should use assignedType but it returns unused
 		if (type == null)
 			return null;
 
-		if (type instanceof SimpleFacetNode) {
-			ComplexComponentInterface owner = (ComplexComponentInterface) type.getOwningComponent();
-			if (owner instanceof SimpleAttributeOwner)
-				return (Node) ((SimpleAttributeOwner) owner).getSimpleType();
-			else
-				return (Node) owner;
-		} else if (type instanceof AliasNode) {
+		// if (type instanceof SimpleFacetNode) {
+		// assert false; // FIXME
+		// ComplexComponentInterface owner = (ComplexComponentInterface) type.getOwningComponent();
+		// if (owner instanceof SimpleAttributeOwner)
+		// return (Node) ((SimpleAttributeOwner) owner).getAssignedType();
+		// else
+		// return (Node) owner;
+		// } else
+		if (type instanceof AliasNode) {
 			AliasNode alias = (AliasNode) type;
-			return alias.getOwningComponent();
+			return (Node) alias.getOwningComponent();
 		}
 		return type;
 	}

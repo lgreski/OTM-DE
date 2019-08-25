@@ -17,20 +17,19 @@ package org.opentravel.schemas.node.properties;
 
 import org.eclipse.swt.graphics.Image;
 import org.opentravel.schemacompiler.model.TLIndicator;
+import org.opentravel.schemacompiler.model.TLIndicatorOwner;
 import org.opentravel.schemacompiler.model.TLModelElement;
 import org.opentravel.schemas.node.ComponentNodeType;
-import org.opentravel.schemas.node.ImpliedNode;
-import org.opentravel.schemas.node.ModelNode;
 import org.opentravel.schemas.node.Node;
 import org.opentravel.schemas.node.NodeFactory;
 import org.opentravel.schemas.node.NodeNameUtils;
+import org.opentravel.schemas.node.interfaces.FacetInterface;
 import org.opentravel.schemas.node.interfaces.INode;
 import org.opentravel.schemas.properties.Images;
-import org.opentravel.schemas.types.TypeProvider;
 
 /**
  * A property node that represents a boolean XML attribute with the semantics of "False unless present and true". See
- * {@link NodeFactory#newMember(INode, Object)}
+ * {@link NodeFactory#newMemberOLD(INode, Object)}
  * 
  * @author Dave Hollander
  * 
@@ -38,73 +37,54 @@ import org.opentravel.schemas.types.TypeProvider;
 
 public class IndicatorNode extends PropertyNode {
 
-	public IndicatorNode(PropertyOwnerInterface parent, String name) {
-		super(new TLIndicator(), (Node) parent, name, PropertyNodeType.INDICATOR);
-		// setIdentity(name);
-
-		assert (!getTLModelObject().getListeners().isEmpty());
+	public IndicatorNode() {
+		super();
+		if (parent != null)
+			changeHandler = new PropertyRoleChangeHandler(this);
 	}
 
-	/**
-	 * 
-	 * @param tlObj
-	 * @param parent
-	 *            either a facet or extension point facet
-	 */
-	public IndicatorNode(TLModelElement tlObj, PropertyOwnerInterface parent) {
-		super(tlObj, (INode) parent, PropertyNodeType.INDICATOR);
+	public IndicatorNode(FacetInterface parent, String name) {
+		super(new TLIndicator(), parent, name);
+		if (parent != null)
+			changeHandler = new PropertyRoleChangeHandler(this);
+	}
 
-		if (!(tlObj instanceof TLIndicator))
-			throw new IllegalArgumentException("Invalid object for an indicator.");
-		assert (!getTLModelObject().getListeners().isEmpty());
+	public IndicatorNode(TLIndicator tlObj, FacetInterface parent) {
+		super(tlObj, parent);
+		if (parent != null)
+			changeHandler = new PropertyRoleChangeHandler(this);
+	}
+
+	@Override
+	public void addToTL(final FacetInterface owner, final int index) {
+		if (owner.getTLModelObject() instanceof TLIndicatorOwner)
+			try {
+				((TLIndicatorOwner) owner.getTLModelObject()).addIndicator(index, getTLModelObject());
+			} catch (IndexOutOfBoundsException e) {
+				((TLIndicatorOwner) owner.getTLModelObject()).addIndicator(getTLModelObject());
+			}
+		owner.getChildrenHandler().clear();
+		setParent((Node) owner);
 	}
 
 	@Override
 	public boolean canAssign(Node type) {
-		return (type == ModelNode.getIndicatorNode() || type == ModelNode.getUndefinedNode());
+		return false;
 	}
 
-	/*
-	 * (non-Javadoc)
-	 * 
-	 * @see org.opentravel.schemas.node.PropertyNode#createProperty(org.opentravel.schemas.node.Node)
+	/**
+	 * @return true if this node could be assigned a type but is unassigned.
 	 */
 	@Override
+	public boolean isUnAssigned() {
+		return false;
+	}
+
+	@Override
 	public INode createProperty(Node type) {
-		TLIndicator tlObj = (TLIndicator) cloneTLObj();
-		int index = indexOfNode();
-		((TLIndicator) getTLModelObject()).getOwner().addIndicator(index, tlObj);
-		IndicatorElementNode n = new IndicatorElementNode(tlObj, null);
-		n.setName(type.getName());
-		getParent().linkChild(n, indexOfNode());
-		((TLIndicator) getTLModelObject()).getOwner().addIndicator(index, tlObj);
-		n.setDescription(type.getDescription());
-		return n;
-	}
-
-	@Override
-	public TypeProvider getAssignedType() {
-		return getRequiredType();
-	}
-
-	@Override
-	public ImpliedNode getRequiredType() {
-		return ModelNode.getIndicatorNode();
-	}
-
-	@Override
-	public String getName() {
-		return emptyIfNull(getTLModelObject().getName());
-	}
-
-	@Override
-	public TLIndicator getTLModelObject() {
-		return (TLIndicator) (modelObject != null ? modelObject.getTLModelObj() : null);
-	}
-
-	@Override
-	public Image getImage() {
-		return Images.getImageRegistry().get(Images.Indicator);
+		TLIndicator tlClone = (TLIndicator) cloneTLObj();
+		IndicatorNode n = new IndicatorNode(tlClone, null);
+		return super.createProperty(n, type);
 	}
 
 	@Override
@@ -113,21 +93,29 @@ public class IndicatorNode extends PropertyNode {
 	}
 
 	@Override
-	public boolean isNavChild(boolean deep) {
-		return deep;
-		// return false;
+	public Image getImage() {
+		return Images.getImageRegistry().get(Images.Indicator);
 	}
 
 	@Override
-	public String getLabel() {
-		return getName();
-		// return modelObject.getLabel() == null ? "" : modelObject.getLabel();
+	public String getName() {
+		return getTLModelObject() != null ? getTLModelObject().getName() : "";
+	}
+
+	@Override
+	public Node getParent() {
+		return super.getParent((TLModelElement) getTLModelObject().getOwner(), true);
+	}
+
+	@Override
+	public TLIndicator getTLModelObject() {
+		return (TLIndicator) tlObj;
 	}
 
 	@Override
 	public int indexOfTLProperty() {
-		final TLIndicator thisProp = (TLIndicator) getTLModelObject();
-		return thisProp.getOwner().getIndicators().indexOf(thisProp);
+		return getTLModelObject() != null ? getTLModelObject().getOwner().getIndicators().indexOf(getTLModelObject())
+				: 0;
 	}
 
 	@Override
@@ -136,18 +124,52 @@ public class IndicatorNode extends PropertyNode {
 	}
 
 	@Override
-	public boolean isIndicator() {
-		return true;
-	}
-
-	@Override
 	public boolean isRenameable() {
-		return isEditable() && !inherited;
+		return isEditable() && !isInherited();
 	}
 
 	@Override
 	public void setName(String name) {
-		getTLModelObject().setName(NodeNameUtils.fixIndicatorName(name));
+		if (getTLModelObject() != null)
+			getTLModelObject().setName(NodeNameUtils.fixIndicatorName(name));
+	}
+
+	@Override
+	protected void moveDownTL() {
+		if (getTLModelObject() != null)
+			getTLModelObject().moveDown();
+	}
+
+	@Override
+	protected void moveUpTL() {
+		if (getTLModelObject() != null)
+			getTLModelObject().moveUp();
+	}
+
+	@Override
+	protected void removeFromTL() {
+		if (getTLModelObject() != null && getTLModelObject().getOwner() != null)
+			getTLModelObject().getOwner().removeIndicator(getTLModelObject());
+	}
+
+	/*
+	 * (non-Javadoc)
+	 * 
+	 * @see org.opentravel.schemas.node.properties.PropertyNode#hasNavChildren(boolean)
+	 */
+	@Override
+	public boolean hasNavChildren(boolean deep) {
+		return false;
+	}
+
+	/*
+	 * (non-Javadoc)
+	 * 
+	 * @see org.opentravel.schemas.node.properties.PropertyNode#isNavChild(boolean)
+	 */
+	@Override
+	public boolean isNavChild(boolean deep) {
+		return false;
 	}
 
 }

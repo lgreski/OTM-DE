@@ -18,16 +18,22 @@
  */
 package org.opentravel.schemas.commands;
 
+import java.util.ArrayList;
+import java.util.List;
+
 import org.eclipse.core.commands.AbstractHandler;
 import org.eclipse.jface.resource.ImageDescriptor;
 import org.opentravel.schemas.controllers.MainController;
 import org.opentravel.schemas.node.ComponentNode;
-import org.opentravel.schemas.node.ExtensionPointNode;
 import org.opentravel.schemas.node.Node;
+import org.opentravel.schemas.node.ProjectNode;
 import org.opentravel.schemas.node.ServiceNode;
-import org.opentravel.schemas.node.facets.FacetNode;
-import org.opentravel.schemas.node.facets.OperationNode;
+import org.opentravel.schemas.node.interfaces.FacetInterface;
 import org.opentravel.schemas.node.interfaces.VersionedObjectInterface;
+import org.opentravel.schemas.node.libraries.LibraryNavNode;
+import org.opentravel.schemas.node.libraries.LibraryNode;
+import org.opentravel.schemas.node.objectMembers.ExtensionPointNode;
+import org.opentravel.schemas.node.objectMembers.OperationNode;
 import org.opentravel.schemas.properties.Messages;
 import org.opentravel.schemas.stl2developer.DialogUserNotifier;
 import org.opentravel.schemas.stl2developer.MainWindow;
@@ -41,7 +47,6 @@ import org.slf4j.LoggerFactory;
  * 
  */
 public abstract class OtmAbstractHandler extends AbstractHandler implements OtmHandler {
-
 	private static final Logger LOGGER = LoggerFactory.getLogger(OtmAbstractHandler.class);
 
 	protected MainController mc;
@@ -54,10 +59,79 @@ public abstract class OtmAbstractHandler extends AbstractHandler implements OtmH
 	protected OtmAbstractHandler(MainController mc) {
 		// LOGGER.debug("Handler constructed with controller: "+this.getClass());
 		this.mc = mc;
-		if (mc == null) {
+		if (mc == null)
 			throw new IllegalArgumentException("Tried to construct view without a main controller.");
-		}
+
 		mainWindow = mc.getMainWindow();
+		if (mainWindow == null)
+			throw new IllegalArgumentException("Tried to construct view without a main window.");
+	}
+
+	/**
+	 * @return the first globally selected node or null.
+	 * @see org.opentravel.schemas.controllers.MainController#getGloballySelectNodes()
+	 */
+	public Node getFirstSelected() {
+		if (mc == null)
+			return null;
+		List<Node> selectedNodes = mc.getGloballySelectNodes();
+		Node selection = null;
+		if (selectedNodes != null && !selectedNodes.isEmpty())
+			selection = selectedNodes.get(0);
+		return selection;
+	}
+
+	/**
+	 * Get all libraries that own selected nodes. Remove duplicates. Note: library may be in multiple projects.
+	 * 
+	 * @return de-duplicated list of libraries containing selected in navigator view nodes
+	 */
+	public List<LibraryNode> getSelectedLibraries(boolean editableOnly) {
+		List<LibraryNode> libraries = new ArrayList<>();
+		for (Node cn : mc.getSelectedNodes_NavigatorView()) {
+			if (cn.getLibrary() != null && !libraries.contains(cn.getLibrary()))
+				if (editableOnly && cn.getLibrary().isEditable())
+					libraries.add(cn.getLibrary());
+				else
+					libraries.add(cn.getLibrary());
+		}
+		return libraries;
+	}
+
+	/**
+	 * Library Nav Nodes are returned. Library Nav Nodes connect a library to a specific project. Only library nav nodes
+	 * know which project the library is in. Duplicates removed from list.
+	 * 
+	 * @return all selected libraryNavNodes or empty list.
+	 */
+	public List<LibraryNavNode> getSelectedLibraryNavNodes() {
+		List<LibraryNavNode> libs = new ArrayList<>();
+		List<Node> nodes = mc.getSelectedNodes_NavigatorView();
+		for (Node n : nodes) {
+			if (n instanceof LibraryNavNode)
+				if (!libs.contains(n))
+					libs.add((LibraryNavNode) n);
+		}
+		return libs;
+	}
+
+	/**
+	 * @return ProjectNode containing the selected navigator view node or null.
+	 */
+	public ProjectNode getSelectedProject() {
+		Node node = mc.getSelectedNode_NavigatorView();
+		ProjectNode project = null;
+
+		if (node != null) {
+			if ((node instanceof ProjectNode))
+				project = (ProjectNode) node;
+			else {
+				node = node.getLibrary();
+				if (node != null)
+					project = ((LibraryNode) node).getProject();
+			}
+		}
+		return project;
 	}
 
 	public void execute(OtmEventData event) {
@@ -93,42 +167,58 @@ public abstract class OtmAbstractHandler extends AbstractHandler implements OtmH
 	 * @return newly created node or null if user cancelled or error.
 	 */
 	public ComponentNode createVersionExtension(Node selectedNode) {
-		ComponentNode actOnNode = null; // The node to perform the action on.
-		FacetNode selectedFacet = null;
 		boolean result = false;
-		if (selectedNode.getChain() == null)
+		ComponentNode actOnNode = null; // The node created by versioning the passed node.
+		FacetInterface selectedFacet = null;
+		VersionedObjectInterface selectedOwner = null;
+		if (selectedNode.getOwningComponent() instanceof VersionedObjectInterface)
+			selectedOwner = (VersionedObjectInterface) selectedNode.getOwningComponent();
+
+		if (selectedNode.isEditable_inService()) {
+			// services are unversioned so just return the selected node
+			if (selectedNode.getLibrary().getChain().getHead() == selectedNode.getLibrary())
+				actOnNode = (ComponentNode) selectedNode;
+			else
+				actOnNode = new OperationNode(
+						(ServiceNode) selectedNode.getLibrary().getServiceRoot().getChildren().get(0), "newOperation");
+			// TESTME - if the service is not in the head then create a new service in the head
+			return actOnNode;
+		}
+
+		if (selectedOwner == null) {
+			LOGGER.warn(selectedNode + " Owner " + selectedOwner + " is not a versioned object ");
 			return null;
-
-		if (selectedNode.isInHead())
+		}
+		if (selectedNode.getChain() == null) {
+			LOGGER.warn(selectedNode + " is not in a versioned library chain.");
+			return null;
+		}
+		if (selectedNode.isInHead()) {
 			LOGGER.warn("No version extension needed, " + selectedNode + " is already in head library.");
+			return null;
+		}
 
+		// Do patch version if head of chain is patch
 		if (selectedNode.getChain().getHead().isPatchVersion()) {
 			// Will always be in a different library or else it is a ExtensionPoint facet.
 			if (!(selectedNode instanceof ExtensionPointNode)) {
 				if (result = postConfirm("action.component.version.patch", selectedNode))
 					actOnNode = ((ComponentNode) selectedNode).createPatchVersionComponent();
-			}
+			} else
+				DialogUserNotifier.openWarning("Warning", "Can not create patch version of " + selectedNode);
 
+			return actOnNode;
 		}
 
-		// If a major minor version, create a new object of same type and add base link to this.
-		else if (selectedNode.getChain().getHead().isMinorOrMajorVersion()) {
-			if (selectedNode instanceof FacetNode) {
-				// Hold onto for later and use the owner to create versioned component
-				selectedFacet = (FacetNode) selectedNode;
-				selectedNode = selectedNode.getOwningComponent();
-			}
-			if (selectedNode instanceof VersionedObjectInterface) {
-				if (result = postConfirm("action.component.version.minor", selectedNode))
-					actOnNode = ((VersionedObjectInterface) selectedNode).createMinorVersionComponent();
-			} else if (selectedNode.isEditable_inService())
-				// services are unversioned so just return the selected node
-				if (selectedNode.getLibrary().getChain().getHead() == selectedNode.getLibrary())
-					actOnNode = (ComponentNode) selectedNode;
-				else
-					actOnNode = new OperationNode((ServiceNode) selectedNode.getLibrary().getServiceRoot()
-							.getChildren().get(0), "newOperation");
-			// TESTME - if the service is not in the head then create a new service in the head
+		// Do a minor version if the head is a minor or major version
+		if (selectedNode.getChain().getHead().isMinorOrMajorVersion()) {
+			// Hold onto for later and use the owner to create versioned component
+			if (selectedNode instanceof FacetInterface)
+				selectedFacet = (FacetInterface) selectedNode;
+
+			// Confirm with the user then create a new object of same type and add base link to this.
+			if (result = postConfirm("action.component.version.minor", selectedNode))
+				actOnNode = selectedOwner.createMinorVersionComponent();
 		}
 
 		if (actOnNode == null && result == true)

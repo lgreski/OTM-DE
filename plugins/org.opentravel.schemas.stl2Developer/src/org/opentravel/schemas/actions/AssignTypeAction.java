@@ -22,8 +22,8 @@ import org.eclipse.core.commands.ExecutionEvent;
 import org.eclipse.core.commands.ExecutionException;
 import org.opentravel.schemas.commands.OtmAbstractHandler;
 import org.opentravel.schemas.node.Node;
-import org.opentravel.schemas.node.facets.FacetNode;
 import org.opentravel.schemas.node.interfaces.ExtensionOwner;
+import org.opentravel.schemas.node.interfaces.FacetInterface;
 import org.opentravel.schemas.properties.ExternalizedStringProperties;
 import org.opentravel.schemas.properties.StringProperties;
 import org.opentravel.schemas.stl2developer.DialogUserNotifier;
@@ -66,52 +66,47 @@ public class AssignTypeAction extends OtmAbstractAction {
 	@Override
 	public void run() {
 		LOGGER.debug("Assign Type action starting.");
-		Node n = mc.getSelectedNode_NavigatorView();
+		Node n = getNavigatorSelection();
 		if (n instanceof TypeProviderWhereUsedNode)
 			replaceTypeSelection((TypeProviderWhereUsedNode) n);
-		// else if (n instanceof LibraryUserNode)
-		// replaceLibrary((LibraryUserNode) n);
 		return;
 	}
 
 	@Override
 	public boolean isEnabled() {
-		// return false;
-		Node n = getMainController().getCurrentNode_NavigatorView();
-		if (n == null || !(n instanceof TypeProviderWhereUsedNode))
+		Node n = getNavigatorSelection();
+		if (!(n instanceof TypeProviderWhereUsedNode))
 			return false;
+
 		// Allow replacement if any user is editable
 		return (!((TypeProviderWhereUsedNode) n).getAllUsers(true).isEmpty());
-		// return n.getChain() == null ? n.isEditable() : n.getChain().isMajor();
 	}
 
 	// From OTM Actions (46) - typeSelector - type selection buttons in facet view
-	public static boolean execute(List<Node> toChange, Node newType) {
+	public static void execute(List<Node> toChange, Node newType) {
 		if (newType == null || !newType.isNamedEntity()) {
 			LOGGER.warn("No type to assign. Early Exit.");
-			return false;
+			// return false;
 		}
-		if (toChange == null || toChange.size() <= 0) {
+		if (toChange == null || toChange.isEmpty()) {
 			LOGGER.warn("Nothing to assign to. Early Exit.");
-			return false;
+			// return false;
 		}
 		Node last = null;
-		boolean ret = true;
+		TypeProvider ret = null;
 		for (Node cn : toChange) {
 			// 10/2016 dmh - clean up logic and skip fixName since done in assign type
 			ret = ((TypeUser) cn).setAssignedType((TypeProvider) newType);
-			if (!ret)
+			if (ret == null)
 				DialogUserNotifier.openWarning("Warning", "Invalid type assignment");
-
-			if (last != null && cn.getParent() != last.getParent()) {
-				last = cn;
+			else if (last != null && cn.getParent() != last.getParent())
 				OtmRegistry.getNavigatorView().refresh(last.getParent());
-			}
+			last = cn;
 		}
 		OtmRegistry.getMainController().refresh();
 
 		// LOGGER.debug("Assigned " + newType.getName() + " to " + toChange.size() + " nodes.");
-		return ret;
+		// return ret != null;
 	}
 
 	/**
@@ -141,7 +136,7 @@ public class AssignTypeAction extends OtmAbstractAction {
 		// Node at = (Node) ((TypeUser) tu).getAssignedType();
 		// if (at.getVersionNode() != null)
 		// if (at.getVersionNode().getNewestVersion() != at)
-		// LOGGER.debug("Update type assigned to " + n + " assigned " + at.getNameWithPrefix() + " to  "
+		// LOGGER.debug("Update type assigned to " + n + " assigned " + at.getNameWithPrefix() + " to "
 		// + at.getVersionNode().getNewestVersion());
 		// List<Node> laterATs = at.getLaterVersions();
 		// if (laterATs != null && !laterATs.isEmpty())
@@ -211,12 +206,16 @@ public class AssignTypeAction extends OtmAbstractAction {
 		};
 
 		// If the owning component is not in the head the make a minor version of the owner.
-		Node owner = ((Node) user).getOwningComponent();
+		Node owner = (Node) ((Node) user).getOwningComponent();
 		if (owner != null && owner.getChain() != null && !owner.isInHead2()) {
 			owner = handler.createVersionExtension(owner);
-			// Inherited children fails until children are retrieved (lazy evaluation). Force cloning now.
-			FacetNode owningFacet = findFacet(owner, ((Node) user).getParent().getName());
-			user = (TypeUser) ((Node) user).clone(owningFacet, "");
+			// Owner == null if they canceled out of creating version
+			if (owner != null) {
+				FacetInterface owningFacet = (FacetInterface) owner.findChildByName(user.getParent().getName());
+				// Inherited children fails until children are retrieved (lazy evaluation). Force cloning now.
+				// FacetInterface owningFacet = findFacet(owner, ((Node) user).getParent().getName());
+				user = (TypeUser) ((Node) user).clone((Node) owningFacet, "");
+			}
 		}
 		return owner == null ? null : user;
 	}
@@ -229,6 +228,8 @@ public class AssignTypeAction extends OtmAbstractAction {
 	 *            - nodes selected to be assigned the type selected.
 	 */
 	public static void execute(TypeUser user) {
+		// Runs when the facet table type selection button activated
+
 		// OtmAbstractHandler handler = new OtmAbstractHandler() {
 		// @Override
 		// public Object execute(ExecutionEvent event) throws ExecutionException {
@@ -248,32 +249,35 @@ public class AssignTypeAction extends OtmAbstractAction {
 			LOGGER.debug("Failed to create version.");
 			return;
 		}
-		Node owner = ((Node) user).getOwningComponent();
+		Node owner = (Node) ((Node) user).getOwningComponent();
 
 		// Determine if the property is in the same version as the owner. Older versions will be inherited.
 		if (((Node) user).isInherited()) {
-			FacetNode owningFacet = findFacet(owner, ((Node) user).getParent().getName());
-			user = (TypeUser) ((Node) user).clone(owningFacet, "");
+			FacetInterface owningFacet = findFacet(owner, ((Node) user).getParent().getName());
+			user = (TypeUser) ((Node) user).clone((Node) owningFacet, "");
 		}
 
 		// Now run the wizard
-		ArrayList<Node> list = new ArrayList<Node>();
+		ArrayList<Node> list = new ArrayList<>();
 		list.add((Node) user);
-		final TypeSelectionWizard wizard = new TypeSelectionWizard(list);
+		final TypeSelectionWizard wizard = new TypeSelectionWizard((Node) user);
 		if (wizard.run(OtmRegistry.getActiveShell()))
-			AssignTypeAction.execute(wizard.getList(), wizard.getSelection());
+			AssignTypeAction.execute(list, wizard.getSelection());
+		// TODO - eliminate need for list to be passed
+		// AssignTypeAction.execute(wizard.getList(), wizard.getSelection());
 		// else
-		//			DialogUserNotifier.openInformation("No Selection", Messages.getString("OtmW.101")); //$NON-NLS-1$
+		// DialogUserNotifier.openInformation("No Selection", Messages.getString("OtmW.101")); //$NON-NLS-1$
 		// TODO - should the new owner be removed?
 
 		OtmRegistry.getMainController().refresh(owner);
 	}
 
-	private static FacetNode findFacet(Node owner, String name) {
-		for (Node n : owner.getChildren())
-			if (n instanceof FacetNode)
-				if (n.getName().equals(name))
-					return (FacetNode) n;
+	private static FacetInterface findFacet(Node owner, String name) {
+		if (owner != null)
+			for (Node n : owner.getChildren())
+				if (n instanceof FacetInterface)
+					if (n.getName().equals(name))
+						return (FacetInterface) n;
 		return null;
 	}
 }

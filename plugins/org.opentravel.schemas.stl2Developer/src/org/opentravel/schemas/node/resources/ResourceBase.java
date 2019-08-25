@@ -40,7 +40,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Base generic class for all resource nodes EXCEPT ResourceNode which is a full node. Provides alterative to
+ * Base generic class for all resource nodes EXCEPT ResourceNode which is a full node. Provides alternative to
  * ModelObjects used in full nodes. Includes some utility classes for matching TL enumerations to GUI strings.
  * 
  * @author Dave
@@ -50,21 +50,23 @@ import org.slf4j.LoggerFactory;
  */
 public abstract class ResourceBase<TL> extends Node implements ResourceMemberInterface {
 	private static final Logger LOGGER = LoggerFactory.getLogger(ResourceBase.class);
+	// TODO - use same generic approach to nodes' tlObj
 	protected TL tlObj;
+	protected LibraryNode library;
+
+	// These nodes are never presented in navigator tree so they don't need a children handler.
+	private List<Node> rChildren = new ArrayList<>();
 
 	public ResourceBase(TL obj) {
 		this.tlObj = obj;
 		assert tlObj instanceof TLModelElement;
 		if (GetNode((TLModelElement) tlObj) == null)
-			// if (((TLModelElement) tlObj).getListeners().isEmpty())
-			ListenerFactory.setListner(this);
-		else
-			LOGGER.debug(this + " already had identity listener.");
+			ListenerFactory.setIdentityListner(this);
 
 		// Sometimes the constructor will need to be invoked super on a newly constructed tl object (for example:
 		// ResourceParameter)
-		if (getTLOwner() instanceof TLModelElement && getTLOwner() != null) {
-			parent = this.getNode(((TLModelElement) getTLOwner()).getListeners());
+		if (getTLOwner() instanceof TLModelElement) {
+			parent = this.getNode(getTLOwner().getListeners());
 
 			assert parent != null;
 			assert parent instanceof ResourceMemberInterface;
@@ -85,7 +87,7 @@ public abstract class ResourceBase<TL> extends Node implements ResourceMemberInt
 	public ResourceBase(TL obj, ResourceMemberInterface parent) {
 		this.tlObj = obj;
 		if (tlObj instanceof TLModelElement)
-			ListenerFactory.setListner(this);
+			ListenerFactory.setIdentityListner(this);
 		this.parent = (Node) parent;
 
 		setLibrary(((Node) parent).getLibrary());
@@ -98,6 +100,14 @@ public abstract class ResourceBase<TL> extends Node implements ResourceMemberInt
 	public void addChild(ResourceMemberInterface child) {
 		if (!getChildren().contains(child))
 			getChildren().add((Node) child);
+	}
+
+	/**
+	 * Return the rChildren array common to all resource base sub-types
+	 */
+	@Override
+	public List<Node> getChildren() {
+		return rChildren;
 	}
 
 	public void addListeners() {
@@ -113,9 +123,15 @@ public abstract class ResourceBase<TL> extends Node implements ResourceMemberInt
 	 */
 	@Override
 	public void delete() {
-		// LOGGER.debug("Deleting " + this);
+		// LOGGER.debug("Deleting " + this.getClass().getSimpleName() + " " + this);
 		clearListeners();
-		parent.getChildren().remove(this);
+		if (getParent() != null)
+			if (getParent().getChildrenHandler() != null)
+				getParent().getChildrenHandler().clear(this);
+
+		if (getParent() instanceof ResourceBase) {
+			((ResourceBase<?>) getParent()).rChildren.remove(this);
+		}
 		deleted = true;
 	}
 
@@ -170,10 +186,18 @@ public abstract class ResourceBase<TL> extends Node implements ResourceMemberInt
 	public void addChildren() {
 	}
 
+	/**
+	 * @return non-empty string
+	 */
+	@Override
+	public String getDecoration() {
+		return "  (" + this.getClass().getSimpleName() + ")";
+	}
+
 	@Override
 	public String getDescription() {
-		return (tlObj instanceof TLDocumentationOwner) && ((TLDocumentationOwner) tlObj).getDocumentation() != null ? ((TLDocumentationOwner) tlObj)
-				.getDocumentation().getDescription() : "";
+		return (tlObj instanceof TLDocumentationOwner) && ((TLDocumentationOwner) tlObj).getDocumentation() != null
+				? ((TLDocumentationOwner) tlObj).getDocumentation().getDescription() : "";
 	}
 
 	@Override
@@ -183,7 +207,12 @@ public abstract class ResourceBase<TL> extends Node implements ResourceMemberInt
 
 	@Override
 	public LibraryNode getLibrary() {
-		return getOwningComponent().getLibrary();
+		return getOwningComponent() != null ? getOwningComponent().getLibrary() : null;
+	}
+
+	@Override
+	public ResourceNode getOwningResource() {
+		return getOwningComponent();
 	}
 
 	@Override
@@ -206,7 +235,7 @@ public abstract class ResourceBase<TL> extends Node implements ResourceMemberInt
 
 	@Override
 	public Collection<String> getValidationMessages() {
-		ArrayList<String> msgs = new ArrayList<String>();
+		ArrayList<String> msgs = new ArrayList<>();
 		ValidationFindings findings = ValidationManager.validate(getTLModelObject(), false);
 		for (String f : findings.getValidationMessages(FindingType.ERROR, FindingMessageFormat.MESSAGE_ONLY_FORMAT))
 			msgs.add(f);
@@ -233,8 +262,8 @@ public abstract class ResourceBase<TL> extends Node implements ResourceMemberInt
 
 	@Override
 	public boolean isEditable() {
-		return getOwningComponent() == null && getOwningComponent().getLibrary() != null ? false : getOwningComponent()
-				.getLibrary().isEditable();
+		return getOwningComponent() != null || getOwningComponent().getLibrary() != null
+				? getOwningComponent().getLibrary().isEditable() : false;
 	}
 
 	@Override
@@ -286,7 +315,7 @@ public abstract class ResourceBase<TL> extends Node implements ResourceMemberInt
 	 *            node listening to the TL model element
 	 */
 	protected void removeListeners(TLModelElement tl, Node dependent) {
-		Collection<ModelElementListener> listeners = new ArrayList<ModelElementListener>(tl.getListeners());
+		Collection<ModelElementListener> listeners = new ArrayList<>(tl.getListeners());
 		for (ModelElementListener listener : listeners)
 			if (listener instanceof ResourceDependencyListener)
 				if (((ResourceDependencyListener) listener).getNode() == dependent)
@@ -308,8 +337,7 @@ public abstract class ResourceBase<TL> extends Node implements ResourceMemberInt
 
 	protected void clearListeners() {
 		if (tlObj instanceof TLModelElement) {
-			ArrayList<ModelElementListener> listeners = new ArrayList<ModelElementListener>(
-					((TLModelElement) tlObj).getListeners());
+			ArrayList<ModelElementListener> listeners = new ArrayList<>(((TLModelElement) tlObj).getListeners());
 			for (ModelElementListener l : listeners)
 				if (l instanceof INodeListener) {
 					((TLModelElement) tlObj).removeListener(l);

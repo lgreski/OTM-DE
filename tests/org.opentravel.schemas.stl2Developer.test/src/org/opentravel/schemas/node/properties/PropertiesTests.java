@@ -19,12 +19,13 @@
 package org.opentravel.schemas.node.properties;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
 import java.util.ArrayList;
 import java.util.List;
 
-import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 import org.opentravel.schemacompiler.model.TLAttribute;
@@ -34,56 +35,38 @@ import org.opentravel.schemacompiler.model.TLIndicator;
 import org.opentravel.schemacompiler.model.TLOpenEnumeration;
 import org.opentravel.schemacompiler.model.TLProperty;
 import org.opentravel.schemacompiler.model.TLRole;
-import org.opentravel.schemas.controllers.DefaultProjectController;
-import org.opentravel.schemas.controllers.MainController;
-import org.opentravel.schemas.node.BusinessObjectNode;
 import org.opentravel.schemas.node.ComponentNode;
-import org.opentravel.schemas.node.CoreObjectNode;
-import org.opentravel.schemas.node.EnumerationClosedNode;
-import org.opentravel.schemas.node.EnumerationOpenNode;
 import org.opentravel.schemas.node.ModelNode;
 import org.opentravel.schemas.node.Node;
 import org.opentravel.schemas.node.NodeFinders;
 import org.opentravel.schemas.node.NodeNameUtils;
-import org.opentravel.schemas.node.ProjectNode;
-import org.opentravel.schemas.node.VWA_Node;
-import org.opentravel.schemas.node.facets.FacetNode;
-import org.opentravel.schemas.node.facets.RoleFacetNode;
 import org.opentravel.schemas.node.libraries.LibraryChainNode;
-import org.opentravel.schemas.node.libraries.LibraryNode;
-import org.opentravel.schemas.testUtils.MockLibrary;
+import org.opentravel.schemas.node.typeProviders.EnumerationClosedNode;
+import org.opentravel.schemas.node.typeProviders.EnumerationOpenNode;
+import org.opentravel.schemas.node.typeProviders.FacetProviderNode;
+import org.opentravel.schemas.node.typeProviders.RoleFacetNode;
+import org.opentravel.schemas.node.typeProviders.VWA_Node;
+import org.opentravel.schemas.node.typeProviders.facetOwners.BusinessObjectNode;
+import org.opentravel.schemas.node.typeProviders.facetOwners.CoreObjectNode;
+import org.opentravel.schemas.testUtils.BaseTest;
 import org.opentravel.schemas.types.TypeProvider;
 
 /**
  * @author Dave Hollander
  * 
  */
-public class PropertiesTests {
-	ModelNode model = null;
-	MockLibrary mockLibrary = null;
-	LibraryNode ln = null;
-	MainController mc;
-	DefaultProjectController pc;
-	ProjectNode defaultProject;
-
-	// Node_Tests nt = new Node_Tests();
-	// LoadFiles lf = new LoadFiles();
-	// LibraryTests lt = new LibraryTests();
+public class PropertiesTests extends BaseTest {
 
 	@Before
-	public void beforeEachTest() {
-		mc = new MainController();
-		mockLibrary = new MockLibrary();
-		pc = (DefaultProjectController) mc.getProjectController();
-		defaultProject = pc.getDefaultProject();
-		ln = mockLibrary.createNewLibrary("http://example.com/test", "test", defaultProject);
+	public void beforeEachOfTheseTests() {
+		ln = ml.createNewLibrary("http://example.com/test", "test", defaultProject);
 	}
 
 	@Test
 	public void equivalents() {
-		LibraryChainNode lcn = mockLibrary.createNewManagedLibrary("EQ_Test", pc.getDefaultProject());
+		LibraryChainNode lcn = ml.createNewManagedLibrary("EQ_Test", pc.getDefaultProject());
 		ln = lcn.getHead();
-		BusinessObjectNode bo = mockLibrary.addBusinessObjectToLibrary(ln, "EQBO");
+		BusinessObjectNode bo = ml.addBusinessObjectToLibrary(ln, "EQBO");
 		PropertyNode p = (PropertyNode) bo.getFacet_Summary().getChildren().get(0);
 		createEquivalents(p);
 	}
@@ -92,35 +75,35 @@ public class PropertiesTests {
 	 * Adds an equivalent to the property node and tests it.
 	 */
 	public void createEquivalents(PropertyNode p) {
-		Assert.assertNotNull(p);
+		assertNotNull(p);
 		p.setEquivalent("V1"); // creates handler
 		IValueWithContextHandler eqh = p.getEquivalentHandler();
-		Assert.assertNotNull(eqh);
-		Assert.assertNotNull(p.getLibrary().getTLLibrary());
+		assertNotNull(eqh);
+		assertNotNull(p.getLibrary().getTLLibrary());
 		testValueWithContextHandler(eqh);
 	}
 
 	@Test
 	public void examples() {
-		LibraryChainNode lcn = mockLibrary.createNewManagedLibrary("EQ_Test", pc.getDefaultProject());
+		LibraryChainNode lcn = ml.createNewManagedLibrary("EQ_Test", pc.getDefaultProject());
 		ln = lcn.getHead();
-		BusinessObjectNode bo = mockLibrary.addBusinessObjectToLibrary(ln, "EQBO");
+		BusinessObjectNode bo = ml.addBusinessObjectToLibrary(ln, "EQBO");
 		PropertyNode p = (PropertyNode) bo.getFacet_Summary().getChildren().get(0);
-		Assert.assertNotNull(p);
+		assertNotNull(p);
 		p.setExample("V1"); // creates handler
 		IValueWithContextHandler exh = p.getExampleHandler();
-		Assert.assertNotNull(exh);
-		Assert.assertNotNull(p.getLibrary().getTLLibrary());
+		assertNotNull(exh);
+		assertNotNull(p.getLibrary().getTLLibrary());
 		testValueWithContextHandler(exh);
 	}
 
 	private void testValueWithContextHandler(IValueWithContextHandler handler) {
 		handler.set("V1", null); // Uses default context
-		Assert.assertEquals(1, handler.getCount());
+		assertEquals(1, handler.getCount());
 		String defaultAppContext = handler.getApplicationContext();
 		String defaultContextId = handler.getContextID();
-		Assert.assertFalse(defaultAppContext.isEmpty());
-		Assert.assertFalse(defaultContextId.isEmpty());
+		assertFalse(defaultAppContext.isEmpty());
+		assertFalse(defaultContextId.isEmpty());
 
 		// Add context to library and context manager -
 		// must use context controller because it is needed in the valid context tests.
@@ -131,121 +114,123 @@ public class PropertiesTests {
 		// Create 2 values
 		handler.set("V2", "C1"); // removes other values
 		handler.set("V3", "C2"); // removes other values
-		Assert.assertEquals(1, handler.getCount());
+		assertEquals(1, handler.getCount());
 
-		Assert.assertEquals("", handler.get("C1"));
-		Assert.assertEquals("V3", handler.get("C2"));
+		assertEquals("", handler.get("C1"));
+		assertEquals("V3", handler.get("C2"));
 
 		handler.set("V4", "C2"); // removes other values
 
 		// C2 is not in context controller so fix changes context value to nsPrefix
 		handler.fix("C2");
-		Assert.assertEquals(1, handler.getCount());
-		Assert.assertEquals("V4", handler.get(defaultContextId));
-		Assert.assertTrue(handler.getApplicationContext().equals(defaultAppContext));
+		assertEquals(1, handler.getCount());
+		assertEquals("V4", handler.get(defaultContextId));
+		assertTrue(handler.getApplicationContext().equals(defaultAppContext));
 
 		// Test fix to move value V4 to default context.
 		handler.fix(null);
-		Assert.assertEquals(1, handler.getCount());
-		Assert.assertEquals("V4", handler.get(null));
-		Assert.assertTrue(handler.getApplicationContext().equals(defaultAppContext));
+		assertEquals(1, handler.getCount());
+		assertEquals("V4", handler.get(null));
+		assertTrue(handler.getApplicationContext().equals(defaultAppContext));
 
 		handler.set(null, "C1"); // remove value
-		Assert.assertEquals(0, handler.getCount());
+		assertEquals(0, handler.getCount());
 
 		// Test setting and getting with no context.
 		handler.set("V5", null); // removes other values
-		Assert.assertTrue(handler.get(null).equals("V5"));
+		assertTrue(handler.get(null).equals("V5"));
 	}
 
 	@Test
 	public void createElements() {
-		BusinessObjectNode bo = mockLibrary.addBusinessObjectToLibrary(ln, "TestBO");
-		FacetNode summary = bo.getFacet_Summary();
-		Assert.assertNotNull(summary);
+		BusinessObjectNode bo = ml.addBusinessObjectToLibrary(ln, "TestBO");
+		FacetProviderNode summary = bo.getFacet_Summary();
+		assertNotNull(summary);
 		Node aType = NodeFinders.findNodeByName("date", ModelNode.XSD_NAMESPACE);
 		PropertyNode pn = null;
 		int startCount = summary.getChildren().size();
-
+		// When - add new element
 		pn = new ElementNode(summary, "A");
-		Assert.assertNotNull(pn);
-		Assert.assertNotNull(pn.getLibrary());
-		Assert.assertEquals(pn.getName(), "A");
-
+		assertNotNull(pn);
+		assertNotNull(pn.getLibrary());
+		assertEquals(pn.getName(), "A");
+		// When - add new element
 		pn = new ElementNode(new TLProperty(), summary);
-		Assert.assertNotNull(pn);
+		assertNotNull(pn);
 		pn.setName("b");
-		Assert.assertNotNull(pn.getLibrary());
-		Assert.assertTrue(pn instanceof ElementNode);
-		Assert.assertEquals(pn.getName(), "B");
-		Assert.assertFalse(pn.getLabel().isEmpty());
+		assertNotNull(pn.getLibrary());
+		assertTrue(pn instanceof ElementNode);
+		assertEquals(pn.getName(), "B");
+		assertFalse(pn.getLabel().isEmpty());
 		pn.setName("AAA");
-		Assert.assertEquals(pn.getName(), "AAA");
-		Assert.assertNotNull(pn.getLibrary());
+		assertEquals(pn.getName(), "AAA");
+		assertNotNull(pn.getLibrary());
 
+		// When - add new element
 		pn = (PropertyNode) pn.createProperty(aType);
-		Assert.assertNotNull(pn);
+		assertNotNull(pn);
 
-		Assert.assertEquals(startCount + 3, summary.getChildren().size()); // addBO creates one
+		assertEquals(startCount + 3, summary.getChildren().size()); // addBO creates one
 	}
 
 	@Test
 	public void createElementRefs() {
-		BusinessObjectNode bo = mockLibrary.addBusinessObjectToLibrary(ln, "TestBO");
-		BusinessObjectNode A = mockLibrary.addBusinessObjectToLibrary(ln, "A");
-		PropertyOwnerInterface summary = bo.getFacet_Summary();
-		Assert.assertNotNull(summary);
+		BusinessObjectNode bo = ml.addBusinessObjectToLibrary(ln, "TestBO");
+		BusinessObjectNode A = ml.addBusinessObjectToLibrary(ln, "A");
+		FacetProviderNode summary = bo.getFacet_Summary();
+		assertNotNull(summary);
 		Node aType = NodeFinders.findNodeByName("date", ModelNode.XSD_NAMESPACE);
-		PropertyNode pn = null;
+		TypedPropertyNode pn = null;
 		int startCount = summary.getChildren().size();
 
-		pn = new ElementReferenceNode(summary, "ThisIsIgnored");
-		Assert.assertNotNull(pn);
-		Assert.assertNotNull(pn.getLibrary());
+		pn = new ElementReferenceNode(summary); // Name is "Missing"
+		assertNotNull(pn);
+		assertNotNull(pn.getLibrary());
 		pn.setAssignedType(A);
-		Assert.assertEquals("ARef", pn.getName());
+		assertEquals("ARef", pn.getName());
 
-		pn = new ElementReferenceNode(new TLProperty(), summary);
-		Assert.assertNotNull(pn);
-		pn.setName("b");
-		Assert.assertNotNull(pn.getLibrary());
-		Assert.assertEquals(NodeNameUtils.fixElementRefName("B"), pn.getName());
-		Assert.assertFalse(pn.getLabel().isEmpty());
-		Assert.assertNotNull(pn.getLibrary());
+		TLProperty tlp = new TLProperty();
+		tlp.setReference(true);
+		pn = new ElementReferenceNode(tlp, summary);
+		assertNotNull(pn);
+		assertNotNull(pn.getLibrary());
+		// No effect! - pn.setName("b");
+		pn.setAssignedType(bo);
+		assertFalse(pn.getName().isEmpty());
+		assertFalse(pn.getLabel().isEmpty());
+		assertNotNull(pn.getLibrary());
 
-		pn = (PropertyNode) pn.createProperty(aType);
-		Assert.assertNotNull(pn);
-
-		Assert.assertEquals(startCount + 3, summary.getChildren().size()); // addBO creates one
+		assertEquals(startCount + 2, summary.getChildren().size());
 	}
 
 	@Test
 	public void createAttributes() {
-		BusinessObjectNode bo = mockLibrary.addBusinessObjectToLibrary(ln, "TestBO");
-		FacetNode summary = bo.getFacet_Summary();
-		Assert.assertNotNull(summary);
+		BusinessObjectNode bo = ml.addBusinessObjectToLibrary(ln, "TestBO");
+		FacetProviderNode summary = bo.getFacet_Summary();
+		assertTrue(summary != null);
 		Node aType = NodeFinders.findNodeByName("date", ModelNode.XSD_NAMESPACE);
+		assertTrue(aType != null);
 		PropertyNode pn, pn1 = null;
 		int startingCount = summary.getChildren().size();
 
 		// When - new attribute
 		pn1 = new AttributeNode(summary, "A");
-		Assert.assertNotNull(pn1);
-		Assert.assertNotNull(pn1.getLibrary());
-		Assert.assertEquals("a", pn1.getName());
+		assertTrue(pn1 != null);
+		assertTrue(pn1.getLibrary() != null);
+		assertEquals("a", pn1.getName());
 
-		// When - new attribute
+		// When - new attribute - different constructor
 		pn = new AttributeNode(new TLAttribute(), summary);
-		Assert.assertNotNull(pn);
+		assertTrue(pn != null);
 		pn.setName("b");
-		Assert.assertNotNull(pn.getLibrary());
-		Assert.assertEquals(NodeNameUtils.fixAttributeName("B"), pn.getName());
-		Assert.assertFalse(pn.getLabel().isEmpty());
-		Assert.assertNotNull(pn.getLibrary());
+		assertTrue(pn.getLibrary() != null);
+		assertEquals(NodeNameUtils.fixAttributeName("B"), pn.getName());
+		assertFalse(pn.getLabel().isEmpty());
+		assertTrue(pn.getLibrary() != null);
 
 		// When - new attribute
 		pn = (PropertyNode) pn1.createProperty(aType);
-		Assert.assertNotNull(pn);
+		assertTrue(pn != null);
 
 		// TODO - test descriptions ~!!!
 		// TODO - test examples ~!!!
@@ -258,83 +243,83 @@ public class PropertiesTests {
 
 	@Test
 	public void createIds() {
-		VWA_Node vwa = mockLibrary.addVWA_ToLibrary(ln, "Vwa");
+		VWA_Node vwa = ml.addVWA_ToLibrary(ln, "Vwa");
 		final String idName = "SomeIgnoredName";
-		IdNode id = new IdNode(vwa.getAttributeFacet(), idName);
+		IdNode id = new IdNode(vwa.getFacet_Attributes(), idName);
 		Node idType = NodeFinders.findNodeByName("ID", ModelNode.XSD_NAMESPACE);
 
 		// Assert.assertEquals("id", id.getName());
-		Assert.assertEquals(NodeNameUtils.fixAttributeName(idName), id.getName());
-		Assert.assertEquals(idType, id.getAssignedType());
-		Assert.assertEquals(id.getPropertyType(), PropertyNodeType.ID);
-		Assert.assertEquals(id.alternateRoles.currentType, PropertyNodeType.ID);
-		Assert.assertNotNull(id.alternateRoles.oldIdN);
+		assertEquals(NodeNameUtils.fixAttributeName(idName), id.getName());
+		assertEquals(idType, id.getAssignedType());
+		assertEquals(id.getPropertyType(), PropertyNodeType.ID);
+		// assertEquals(id.alternateRoles.currentType, PropertyNodeType.ID);
+		// assertNotNull(id.alternateRoles.oldIdN);
 	}
 
 	@Test
 	public void createIndicatorElements() {
-		BusinessObjectNode bo = mockLibrary.addBusinessObjectToLibrary(ln, "TestBO");
-		FacetNode summary = bo.getFacet_Summary();
-		Assert.assertNotNull(summary);
+		BusinessObjectNode bo = ml.addBusinessObjectToLibrary(ln, "TestBO");
+		FacetProviderNode summary = bo.getFacet_Summary();
+		assertNotNull(summary);
 		Node aType = NodeFinders.findNodeByName("date", ModelNode.XSD_NAMESPACE);
 		PropertyNode pn, pn1 = null;
 		int startCount = summary.getChildren().size();
-
+		// When - add new element
 		pn1 = new IndicatorElementNode(summary, "A");
-		Assert.assertNotNull(pn1);
-		Assert.assertNotNull(pn1.getLibrary());
-		Assert.assertEquals("AInd", pn1.getName());
-
+		assertNotNull(pn1);
+		assertNotNull(pn1.getLibrary());
+		assertEquals("AInd", pn1.getName());
+		// When - add new element
 		pn = new IndicatorElementNode(new TLIndicator(), summary);
-		Assert.assertNotNull(pn);
+		assertNotNull(pn);
 		pn.setName("b");
-		Assert.assertNotNull(pn.getLibrary());
-		Assert.assertEquals(NodeNameUtils.fixIndicatorElementName("B"), pn.getName());
-		Assert.assertNotNull(pn.getRequiredType());
-		Assert.assertFalse(pn.getLabel().isEmpty());
-		Assert.assertNotNull(pn.getLibrary());
-
+		assertNotNull(pn.getLibrary());
+		assertEquals(NodeNameUtils.fixIndicatorElementName("B"), pn.getName());
+		// assertNotNull(pn.getRequiredType());
+		assertFalse(pn.getLabel().isEmpty());
+		assertNotNull(pn.getLibrary());
+		// When - add new element
 		pn = (PropertyNode) pn1.createProperty(aType);
-		Assert.assertNotNull(pn);
+		assertNotNull(pn);
 
 		// TODO - test descriptions ~!!!
 		// TODO - test examples ~!!!
 		// TODO - test equivalents ~!!!
 
-		Assert.assertEquals(startCount + 3, summary.getChildren().size()); // addBO creates one
+		assertEquals(startCount + 3, summary.getChildren().size());
 	}
 
 	@Test
 	public void createIndicator() {
-		BusinessObjectNode bo = mockLibrary.addBusinessObjectToLibrary(ln, "TestBO");
-		FacetNode summary = bo.getFacet_Summary();
-		Assert.assertNotNull(summary);
+		BusinessObjectNode bo = ml.addBusinessObjectToLibrary(ln, "TestBO");
+		FacetProviderNode summary = bo.getFacet_Summary();
+		assertNotNull(summary);
 		Node aType = NodeFinders.findNodeByName("date", ModelNode.XSD_NAMESPACE);
 		PropertyNode pn, pn1 = null;
 		int startCount = summary.getChildren().size();
 
 		pn1 = new IndicatorNode(summary, "A");
-		Assert.assertNotNull(pn1);
-		Assert.assertNotNull(pn1.getLibrary());
-		Assert.assertEquals("aInd", pn1.getName());
+		assertNotNull(pn1);
+		assertNotNull(pn1.getLibrary());
+		assertEquals("aInd", pn1.getName());
 
 		pn = new IndicatorElementNode(new TLIndicator(), summary);
-		Assert.assertNotNull(pn);
+		assertNotNull(pn);
 		pn.setName("b");
-		Assert.assertNotNull(pn.getLibrary());
-		Assert.assertEquals(NodeNameUtils.fixIndicatorElementName("b"), pn.getName());
-		Assert.assertNotNull(pn.getRequiredType());
-		Assert.assertFalse(pn.getLabel().isEmpty());
-		Assert.assertNotNull(pn.getLibrary());
+		assertNotNull(pn.getLibrary());
+		assertEquals(NodeNameUtils.fixIndicatorElementName("b"), pn.getName());
+		// assertNotNull(pn.getRequiredType());
+		assertFalse(pn.getLabel().isEmpty());
+		assertNotNull(pn.getLibrary());
 
 		pn = (PropertyNode) pn1.createProperty(aType);
-		Assert.assertNotNull(pn);
+		assertNotNull(pn);
 
 		// TODO - test descriptions ~!!!
 		// TODO - test examples ~!!!
 		// TODO - test equivalents ~!!!
 
-		Assert.assertEquals(startCount + 3, summary.getChildren().size()); // addBO creates one
+		assertEquals(startCount + 3, summary.getChildren().size()); // addBO creates one
 	}
 
 	@Test
@@ -351,48 +336,49 @@ public class PropertiesTests {
 
 		// TODO - use open.addLiteral() instead
 		litA = new EnumLiteralNode(open, "A");
-		Assert.assertNotNull("litA");
+		assertNotNull("litA");
 		lit = new EnumLiteralNode(new TLEnumValue(), open);
 		lit.setName("B");
-		Assert.assertNotNull("litA");
+		assertNotNull("litA");
 
 		lit = (EnumLiteralNode) litA.createProperty(aType);
-		Assert.assertEquals(NodeNameUtils.fixEnumerationValue(aType.getName()), lit.getName());
-		Assert.assertEquals(3, open.getChildren().size());
+		assertEquals(NodeNameUtils.fixEnumerationValue(aType.getName()), lit.getName());
+		assertEquals(3, open.getChildren().size());
 
 	}
 
 	@Test
 	public void createRoles() {
-		CoreObjectNode core = mockLibrary.addCoreObjectToLibrary(ln, "Core");
+		CoreObjectNode core = ml.addCoreObjectToLibrary(ln, "Core");
 		Node aType = NodeFinders.findNodeByName("date", ModelNode.XSD_NAMESPACE);
-		RoleFacetNode roles = core.getRoleFacet();
+		RoleFacetNode roles = core.getFacet_Role();
 		RoleNode rn1, rn = null;
 		int startCount = roles.getChildren().size();
 
 		rn1 = new RoleNode(roles, "A");
-		Assert.assertNotNull(rn1);
-		Assert.assertEquals("A", rn1.getName());
+		assertNotNull(rn1);
+		assertEquals("A", rn1.getName());
 
 		rn = new RoleNode(new TLRole(), roles);
 		rn.setName("B");
-		Assert.assertNotNull(rn);
-		Assert.assertEquals("B", rn.getName());
+		assertNotNull(rn);
+		assertEquals("B", rn.getName());
 
 		rn = (RoleNode) rn1.createProperty(aType);
-		Assert.assertNotNull(rn);
-		Assert.assertEquals("date", rn.getName());
+		assertNotNull(rn);
+		assertEquals("date", rn.getName());
 
-		Assert.assertEquals(startCount + 3, roles.getChildren().size());
+		assertEquals(startCount + 3, roles.getChildren().size());
 	}
 
 	@Test
-	public void changeRoles() {
+	public void assignedNames() {
 		ln.setEditable(true);
-		BusinessObjectNode bo = mockLibrary.addBusinessObjectToLibrary(ln, "ct");
-		PropertyOwnerInterface summary = bo.getFacet_Summary();
+		BusinessObjectNode bo = ml.addBusinessObjectToLibrary(ln, "Ct");
+		FacetProviderNode summary = bo.getFacet_Summary();
 		TypeProvider aType = (TypeProvider) NodeFinders.findNodeByName("date", ModelNode.XSD_NAMESPACE);
-		PropertyNode pn, epn, apn, ipn, rpn, iepn = null;
+		TypedPropertyNode pn, epn, apn, rpn = null;
+		PropertyNode ipn, iepn = null;
 		String eText = "Element";
 		String aText = "attribute";
 		String iText = "xInd";
@@ -404,27 +390,57 @@ public class PropertiesTests {
 		apn.setAssignedType((TypeProvider) NodeFinders.findNodeByName("id", ModelNode.XSD_NAMESPACE));
 		ipn = new IndicatorNode(summary, iText);
 		iepn = new IndicatorElementNode(summary, ieText);
-		rpn = new ElementReferenceNode(summary, rText);
-		boolean x = rpn.setAssignedType(bo);
-		Assert.assertEquals(NodeNameUtils.fixElementName(eText), epn.getName());
-		Assert.assertEquals(NodeNameUtils.fixAttributeName(aText), apn.getName());
-		Assert.assertEquals(NodeNameUtils.fixIndicatorName(iText), ipn.getName());
-		Assert.assertEquals(NodeNameUtils.fixIndicatorElementName(ieText), iepn.getName());
-		Assert.assertEquals(NodeNameUtils.fixElementRefName(rText), rpn.getName());
+		rpn = new ElementReferenceNode(summary, bo);
+
+		// Then - all named as expected.
+		assertEquals(NodeNameUtils.fixElementName(eText), epn.getName());
+		assertEquals(NodeNameUtils.fixAttributeName(aText), apn.getName());
+		assertEquals(NodeNameUtils.fixIndicatorName(iText), ipn.getName());
+		assertEquals(NodeNameUtils.fixIndicatorElementName(ieText), iepn.getName());
+		// Node name utils do not do element ref.
+		// assertEquals(NodeNameUtils.fixElementRefName(rText), rpn.getName());
+		assertTrue(rpn.getName().startsWith(bo.getName()));
 
 		epn.setDescription(eText);
-		Assert.assertEquals(eText, epn.getDescription());
+		assertEquals(eText, epn.getDescription());
 
 		apn.copyDetails(epn);
-		Assert.assertEquals(eText, apn.getDescription());
+		assertEquals(eText, apn.getDescription());
 
-		List<Node> kids = new ArrayList<Node>(summary.getChildren());
+		AttributeReferenceNode arn = new AttributeReferenceNode(summary, bo);
+		assertTrue(arn != null);
+		assertTrue(arn.getName().startsWith(bo.getName()));
+	}
+
+	@Test
+	public void changeRoles() {
+		ln.setEditable(true);
+		BusinessObjectNode bo = ml.addBusinessObjectToLibrary(ln, "ct");
+		FacetProviderNode summary = bo.getFacet_Summary();
+		TypeProvider aType = (TypeProvider) NodeFinders.findNodeByName("date", ModelNode.XSD_NAMESPACE);
+		TypedPropertyNode pn, epn, apn, rpn = null;
+		PropertyNode ipn, iepn = null;
+		String eText = "Element";
+		String aText = "attribute";
+		String iText = "xInd";
+		String rText = "ctRef";
+		String ieText = "XInd";
+
+		epn = new ElementNode(summary, eText, aType);
+		apn = new AttributeNode(summary, aText);
+		apn.setAssignedType((TypeProvider) NodeFinders.findNodeByName("id", ModelNode.XSD_NAMESPACE));
+		ipn = new IndicatorNode(summary, iText);
+		iepn = new IndicatorElementNode(summary, ieText);
+		rpn = new ElementReferenceNode(summary);
+
+		// Change all property roles
+		List<Node> kids = new ArrayList<>(summary.getChildren());
 		for (Node n : kids) {
 			if (n instanceof PropertyNode)
 				changeToAll((PropertyNode) n);
 		}
 		// Do it again to assure the alternateRoles logic works
-		kids = new ArrayList<Node>(summary.getChildren());
+		kids = new ArrayList<>(summary.getChildren());
 		for (Node n : kids) {
 			if (n instanceof PropertyNode)
 				changeToAll((PropertyNode) n);
@@ -435,10 +451,10 @@ public class PropertiesTests {
 	public void addPropertyFromDND_Tests() {
 		// This seems to be dependent on the type of "this" node. create property should only be implemented for facets.
 		ln.setEditable(true);
-		BusinessObjectNode bo = mockLibrary.addBusinessObjectToLibrary(ln, "ct");
-		PropertyOwnerInterface summary = bo.getFacet_Summary();
+		BusinessObjectNode bo = ml.addBusinessObjectToLibrary(ln, "ct");
+		FacetProviderNode summary = bo.getFacet_Summary();
 		Node aType = NodeFinders.findNodeByName("date", ModelNode.XSD_NAMESPACE);
-		ComponentNode cn = (ComponentNode) summary;
+		ComponentNode cn = summary;
 
 		// Does not work. Requires workbench to resolve view.
 		// OtmRegistry.getNavigatorView().setCurrentNode(aType);
@@ -472,6 +488,6 @@ public class PropertiesTests {
 		pn = pn.changePropertyRole(PropertyNodeType.INDICATOR_ELEMENT);
 		pn = pn.changePropertyRole(PropertyNodeType.ID_REFERENCE);
 		pn = pn.changePropertyRole(PropertyNodeType.ELEMENT);
-		Assert.assertEquals(children, pn.getParent().getChildren().size());
+		assertEquals(children, pn.getParent().getChildren().size());
 	}
 }
